@@ -44,8 +44,9 @@ const Hero = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
       >
-        Turn Your Social Media{" "}
-        <span className="text-purple-600">Into Income</span>
+        Connect.{" "}
+        <span className="text-purple-600">Engage.</span>{" "}
+        Grow.
       </motion.h1>
 
       {/* Subtitle */}
