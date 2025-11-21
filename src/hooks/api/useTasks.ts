@@ -32,6 +32,7 @@ export function useTasks(accessToken: string | null) {
     } catch (e: any) {
       setError(e?.message || "Failed to create task");
       setLoading(false);
+      throw e; // propagate error to caller
     }
   }, [accessToken]);
 

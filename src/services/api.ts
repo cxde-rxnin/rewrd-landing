@@ -69,10 +69,10 @@ export const TaskAPI = {
     apiFetch<any[]>("/api/task", {}, accessToken),
   create: (accessToken: string, data: any) =>
     apiFetch<any>("/api/task", { method: "POST", body: JSON.stringify(data) }, accessToken),
-  getSocialPlatforms: () =>
-    apiFetch<any[]>("/api/task/social-platform"),
-  getTaskTypes: (platformId: string) =>
-    apiFetch<any[]>(`/api/task/task-type/${platformId}`),
+  getSocialPlatforms: (accessToken?: string) =>
+    apiFetch<any[]>("/api/task/social-platform", {}, accessToken),
+  getTaskTypes: (platformId: string, accessToken?: string) =>
+    apiFetch<any[]>(`/api/task/task-type/${platformId}`, {}, accessToken),
   delete: (accessToken: string, id: string) =>
     apiFetch(`/api/task/${id}`, { method: "DELETE" }, accessToken),
   submit: (accessToken: string, id: string, action: string) =>
