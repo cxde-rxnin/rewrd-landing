@@ -12,12 +12,20 @@ export function useTasks(accessToken: string | null) {
     setError(null);
     try {
       const data = await TaskAPI.getAll(accessToken);
-      setTasks(data);
+      let tasksArr: any[] = [];
+      if (Array.isArray(data)) {
+        tasksArr = data;
+      } else if (data && Array.isArray((data as any).data)) {
+        tasksArr = (data as any).data;
+      }
+      setTasks(tasksArr);
+      console.log("Fetched tasks:", tasksArr);
       setLoading(false);
-      return data;
+      return tasksArr;
     } catch (e: any) {
       setError(e?.message || "Failed to fetch tasks");
       setLoading(false);
+      console.error("Error fetching tasks:", e);
     }
   }, [accessToken]);
 

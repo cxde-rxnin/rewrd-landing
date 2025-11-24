@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/api/useAuth";
 import { useTasks } from "@/hooks/api/useTasks";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ListChecks, Filter, Plus } from "lucide-react";
+import { ListChecks, Filter, Plus, Heart, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { TaskAPI } from "@/services/api";
 import { Toaster, toast } from "sonner";
@@ -30,6 +30,12 @@ export default function Tasks() {
     if (!initialized || !user || !accessToken) return;
     fetchTasks();
   }, [initialized, user, accessToken, fetchTasks]);
+
+  useEffect(() => {
+    if (Array.isArray(tasks)) {
+      console.log("Fetched tasks:", tasks);
+    }
+  }, [tasks]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -275,50 +281,88 @@ export default function Tasks() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {Array.isArray(tasks) && tasks.length > 0 ? (
-                tasks.map((t: any) => (
-                  <div key={t.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <p className="font-medium">{t.title || t.name}</p>
-                          <p className="text-sm text-muted-foreground">{t.platform || t.type}</p>
-                        </div>
-                        <div className="text-xs">
-                          {t.status === "completed" ? (
-                            <span className="rounded-full bg-green-100 text-green-800 px-3 py-1">Completed</span>
+                tasks.map((t: any) => {
+                  const likeProps = [t.type, t.display_name, t.name, t.task_type?.name, t.task_type?.display_name];
+                  const isLikeTask = likeProps
+                    .map(v => typeof v === "string" ? v.trim().toLowerCase() : "")
+                    .includes("like");
+                  return (
+                    <Card key={t.id} className="relative flex flex-col justify-between border-2 border-muted/30 shadow-sm hover:shadow-lg transition-all rounded-xl p-0 overflow-hidden">
+                      <div className="flex items-center gap-3 px-5 pt-5">
+                        {/* Remove background and color classes from icon container */}
+                        <div>
+                          {isLikeTask ? (
+                            <Heart className="w-6 h-6 text-pink-500" />
                           ) : (
-                            <span className="rounded-full bg-amber-100 text-amber-800 px-3 py-1">Pending</span>
+                            <ListChecks className="w-6 h-6 text-purple-700" />
                           )}
                         </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg leading-tight mb-1">{t.title || t.name}</h3>
+                          <span className="text-xs text-muted-foreground">{t.platform || t.type}</span>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${t.status === "completed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{t.status === "completed" ? "Completed" : "Pending"}</span>
                       </div>
-                    </div>
-                    <div className="ml-4 text-right">
-                      {user.account_type === "participant" ? (
-                        <div>
-                          <p className="font-semibold text-green-600">+{t.reward ?? t.amount ?? 0}</p>
-                          <p className="text-xs text-muted-foreground">reward</p>
+                      <div className="px-5 py-3 flex-1">
+                        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{t.description}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          {user.account_type === "participant" ? (
+                            <div className="flex flex-col items-start">
+                              <span className="font-semibold text-green-600 text-base">+{t.reward ?? t.amount ?? 0}</span>
+                              <span className="text-xs text-muted-foreground">Reward</span>
+                            </div>
+                          ) : user.account_type === "brand" ? (
+                            <div className="flex flex-col items-start">
+                              <span className="font-semibold text-blue-600 text-base">{t.submissions_count ?? 0}</span>
+                              <span className="text-xs text-muted-foreground">Submissions</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-start">
+                              <span className="font-semibold text-amber-600 text-base">{t.status || "pending"}</span>
+                              <span className="text-xs text-muted-foreground">Status</span>
+                            </div>
+                          )}
+                          <span className="text-xs text-muted-foreground">{t.expires_at ? `Expires: ${new Date(t.expires_at).toLocaleDateString()}` : ""}</span>
                         </div>
-                      ) : user.account_type === "brand" ? (
-                        <div>
-                          <p className="font-semibold">{t.submissions_count ?? 0}</p>
-                          <p className="text-xs text-muted-foreground">submissions</p>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="font-semibold">{t.status || "pending"}</p>
-                          <p className="text-xs text-muted-foreground">status</p>
+                      </div>
+                      {user.account_type === "participant" && (
+                        <TaskActionButton task={t} accessToken={accessToken} fetchTasks={fetchTasks} />
+                      )}
+                      {(user.account_type === "brand" || user.account_type === "influencer") && (
+                        <div className="flex gap-2 mt-2 py-4 px-4">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              toast("Edit task feature coming soon!");
+                            }}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await TaskAPI.delete(accessToken, t.id);
+                                toast.success("Task deleted");
+                                fetchTasks();
+                              } catch (err: any) {
+                                toast.error(err?.message || "Failed to delete task");
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       )}
-                    </div>
-                    <Button variant="ghost" size="sm" className="ml-4">
-                      View
-                    </Button>
-                  </div>
-                ))
+                    </Card>
+                  );
+                })
               ) : (
-                <div className="text-center py-12">
+                <div className="col-span-full text-center py-12">
                   <ListChecks className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                   <p className="text-muted-foreground">No tasks available</p>
                 </div>
@@ -328,5 +372,63 @@ export default function Tasks() {
         </Card>
       </div>
     </>
+  );
+}
+
+function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; accessToken: string | null; fetchTasks: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  // Use has_completed and is_active to determine button state
+  const isCompleted = !!task.has_completed;
+  const isActive = !!task.is_active;
+
+  // Only show buttons if task is active and not completed
+  if (!isActive || isCompleted) return null;
+
+  const handleBegin = () => {
+    if (task.url) {
+      window.open(task.url, "_blank");
+    }
+    toast("Task started! You can now complete the task.");
+  };
+
+  const handleComplete = async () => {
+    setLoading(true);
+    try {
+      if (accessToken) {
+        await TaskAPI.submit(accessToken, task.id, "complete");
+        toast.success("Task completed!");
+        fetchTasks();
+      } else {
+        toast.error("No access token");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to complete task");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="px-5 pb-5 flex gap-2">
+      <Button
+        className="w-1/2 bg-black text-white hover:bg-neutral-800"
+        variant={undefined}
+        size="sm"
+        onClick={handleBegin}
+        disabled={loading}
+      >
+        Begin Task
+      </Button>
+      <Button
+        className="w-1/2 bg-green-700 text-white hover:bg-green-800"
+        variant={undefined}
+        size="sm"
+        onClick={handleComplete}
+        disabled={loading}
+      >
+        {loading ? "Completing..." : "Complete Task"}
+      </Button>
+    </div>
   );
 }

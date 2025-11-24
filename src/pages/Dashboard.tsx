@@ -5,7 +5,6 @@ import { useDashboard } from "../hooks/api/useDashboard";
 import { useTasks } from "../hooks/api/useTasks";
 import { useWallet } from "../hooks/api/useWallet";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ListChecks, Wallet as WalletIcon, BarChart3 } from "lucide-react";
 
 const Dashboard = () => {
   const { user, accessToken, initialized } = useAuth();
@@ -30,6 +29,12 @@ const Dashboard = () => {
     fetchWallet();
   }, [initialized, user, accessToken, fetchOverview, fetchOverviewParticipant, fetchTasks, fetchWallet]);
 
+  useEffect(() => {
+    if (overview) {
+      console.log("Dashboard overview:", overview);
+    }
+  }, [overview]);
+
   if (!initialized || !user) return null;
 
   return (
@@ -45,7 +50,7 @@ const Dashboard = () => {
             <CardTitle className="text-sm font-medium">Wallet Balance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{wallet?.balance ?? 0}</div>
+            <div className="text-2xl font-bold">${wallet?.data?.balance?.toLocaleString() ?? "0.00"}</div>
             <p className="text-xs text-muted-foreground">Total available</p>
           </CardContent>
           <img src="/coin.png" alt="coin" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
@@ -87,10 +92,10 @@ const Dashboard = () => {
             </Card>
             <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{user.account_type === "brand" ? "Total Spent" : "Total Earnings"}</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{user.account_type === "brand" ? (overview?.total_spent ?? 0) : (overview?.total_earnings ?? 0)}</div>
+                <div className="text-2xl font-bold">${overview?.data?.total_spent?.toLocaleString() ?? "0.00"}</div>
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
               <img src="/money.png" alt="money" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
