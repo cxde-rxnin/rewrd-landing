@@ -1,4 +1,4 @@
-import { Home, LogOut, BarChart3, ListChecks, Wallet, Sparkles, ChevronLeft } from "lucide-react";
+import { Home, LogOut, BarChart3, ListChecks, Wallet, Sparkles, ChevronLeft, Settings } from "lucide-react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
@@ -33,6 +33,11 @@ const items = [
     url: "/wallet",
     icon: Wallet,
   },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings,
+  },
   // Analytics will be conditionally added below
 ];
 
@@ -49,18 +54,7 @@ export function AppSidebar() {
 
   const isActive = (url: string) => location.pathname === url;
 
-  // Conditionally add Analytics for influencer and brand
-  const sidebarItems = React.useMemo(() => {
-    const base = [...items];
-    if (user?.account_type === "influencer" || user?.account_type === "brand") {
-      base.push({
-        title: "Analytics",
-        url: "/analytics",
-        icon: BarChart3,
-      });
-    }
-    return base;
-  }, [user]);
+  const sidebarItems = items;
 
   return (
     <Sidebar className="border-r border-border/50">
@@ -103,11 +97,10 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       asChild
                       isActive={active}
-                      className={`transition-all duration-200 h-11 ${
-                        active
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                      }`}
+                      className={`transition-all duration-200 h-11 ${active
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        }`}
                     >
                       <Link to={item.url} className="flex items-center gap-3">
                         <item.icon className="h-5 w-5 shrink-0" />

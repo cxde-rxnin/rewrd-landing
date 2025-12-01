@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { ListChecks, Filter, Plus, Heart, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TaskAPI } from "@/services/api";
 import { Toaster, toast } from "sonner";
 
@@ -25,6 +26,7 @@ export default function Tasks() {
     type: "",
   });
   const [loading, setLoading] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
@@ -76,8 +78,23 @@ export default function Tasks() {
 
   if (!initialized || !user) return null;
 
-  const completedTasks = Array.isArray(tasks) ? tasks.filter((t: any) => t.status === "completed").length : 0;
-  const pendingTasks = Array.isArray(tasks) ? tasks.filter((t: any) => t.status !== "completed").length : 0;
+  const filteredTasks = Array.isArray(tasks)
+    ? tasks.filter((t: any) => {
+      // Role-based filtering
+      if (user.account_type !== "participant") {
+        // For brands and influencers, only show tasks they created
+        if (t.creator_id !== user.id && t.user_id !== user.id) return false;
+      }
+      // Platform filtering
+      if (selectedPlatform && t.task_type?.social_platform?.id !== selectedPlatform) {
+        return false;
+      }
+      return true;
+    })
+    : [];
+
+  const completedTasks = filteredTasks.filter((t: any) => t.status === "completed").length;
+  const pendingTasks = filteredTasks.filter((t: any) => t.status !== "completed").length;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -238,10 +255,10 @@ export default function Tasks() {
               <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{Array.isArray(tasks) ? tasks.length : 0}</div>
+              <div className="text-2xl font-bold">{Array.isArray(filteredTasks) ? filteredTasks.length : 0}</div>
               <p className="text-xs text-muted-foreground">All tasks</p>
             </CardContent>
-            <img src="/campaign.png" alt="Total Tasks" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+            <img src="/campaign.png" alt="Total Tasks" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
           </Card>
 
           <Card className="relative overflow-hidden">
@@ -252,7 +269,7 @@ export default function Tasks() {
               <div className="text-2xl font-bold">{completedTasks}</div>
               <p className="text-xs text-muted-foreground">Finished tasks</p>
             </CardContent>
-            <img src="/trophy.png" alt="Completed" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+            <img src="/trophy.png" alt="Completed" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
           </Card>
 
           <Card className="relative overflow-hidden">
@@ -263,7 +280,7 @@ export default function Tasks() {
               <div className="text-2xl font-bold">{pendingTasks}</div>
               <p className="text-xs text-muted-foreground">In progress</p>
             </CardContent>
-            <img src="/task.png" alt="Pending" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+            <img src="/task.png" alt="Pending" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
           </Card>
         </div>
 
@@ -274,16 +291,35 @@ export default function Tasks() {
                 <CardTitle>All Tasks</CardTitle>
                 <CardDescription>Complete list of {user.account_type === "participant" ? "available" : "active"} tasks</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Filter className="h-4 w-4 mr-2" />
+                    {selectedPlatform
+                      ? platforms.find(p => p.id === selectedPlatform)?.name || "Filter"
+                      : "Filter"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setSelectedPlatform(null)}>
+                    All Platforms
+                  </DropdownMenuItem>
+                  {platforms.map((platform: any) => (
+                    <DropdownMenuItem
+                      key={platform.id}
+                      onClick={() => setSelectedPlatform(platform.id)}
+                    >
+                      {platform.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.isArray(tasks) && tasks.length > 0 ? (
-                tasks.map((t: any) => {
+              {filteredTasks.length > 0 ? (
+                filteredTasks.map((t: any) => {
                   const likeProps = [t.type, t.display_name, t.name, t.task_type?.name, t.task_type?.display_name];
                   const isLikeTask = likeProps
                     .map(v => typeof v === "string" ? v.trim().toLowerCase() : "")
@@ -381,15 +417,27 @@ function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; access
   // Use has_completed and is_active to determine button state
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
+  const isInProgress = task.status === 'in_progress' || task.status === 'pending';
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
 
-  const handleBegin = () => {
-    if (task.url) {
-      window.open(task.url, "_blank");
+  const handleBegin = async () => {
+    setLoading(true);
+    try {
+      if (task.url) {
+        window.open(task.url, "_blank");
+      }
+      if (accessToken) {
+        await TaskAPI.submit(accessToken, task.id, "start");
+        toast.success("Task started! You can now complete the task.");
+        fetchTasks();
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to start task");
+    } finally {
+      setLoading(false);
     }
-    toast("Task started! You can now complete the task.");
   };
 
   const handleComplete = async () => {
@@ -410,25 +458,28 @@ function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; access
   };
 
   return (
-    <div className="px-5 pb-5 flex gap-2">
-      <Button
-        className="w-1/2 bg-black text-white hover:bg-neutral-800"
-        variant={undefined}
-        size="sm"
-        onClick={handleBegin}
-        disabled={loading}
-      >
-        Begin Task
-      </Button>
-      <Button
-        className="w-1/2 bg-green-700 text-white hover:bg-green-800"
-        variant={undefined}
-        size="sm"
-        onClick={handleComplete}
-        disabled={loading}
-      >
-        {loading ? "Completing..." : "Complete Task"}
-      </Button>
+    <div className="px-5 pb-5">
+      {!isInProgress ? (
+        <Button
+          className="w-full bg-black text-white hover:bg-neutral-800"
+          variant={undefined}
+          size="sm"
+          onClick={handleBegin}
+          disabled={loading}
+        >
+          {loading ? "Starting..." : "Begin Task"}
+        </Button>
+      ) : (
+        <Button
+          className="w-full bg-green-700 text-white hover:bg-green-800"
+          variant={undefined}
+          size="sm"
+          onClick={handleComplete}
+          disabled={loading}
+        >
+          {loading ? "Completing..." : "Complete Task"}
+        </Button>
+      )}
     </div>
   );
 }

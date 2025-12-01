@@ -35,7 +35,21 @@ const Dashboard = () => {
     }
   }, [overview]);
 
+  useEffect(() => {
+    if (overviewParticipant) {
+      console.log("Dashboard overviewParticipant:", overviewParticipant);
+    }
+  }, [overviewParticipant]);
+
   if (!initialized || !user) return null;
+
+  const filteredTasks = Array.isArray(tasks)
+    ? tasks.filter((t: any) => {
+      if (user.account_type === "participant") return true;
+      // For brands and influencers, only show tasks they created
+      return t.creator_id === user.id || t.user_id === user.id;
+    })
+    : [];
 
   return (
     <div className="space-y-6">
@@ -53,7 +67,7 @@ const Dashboard = () => {
             <div className="text-2xl font-bold">${wallet?.data?.balance?.toLocaleString() ?? "0.00"}</div>
             <p className="text-xs text-muted-foreground">Total available</p>
           </CardContent>
-          <img src="/coin.png" alt="coin" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+          <img src="/coin.png" alt="coin" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
         </Card>
         {user.account_type === "participant" ? (
           <>
@@ -62,20 +76,20 @@ const Dashboard = () => {
                 <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{overviewParticipant?.completed_tasks ?? 0}</div>
+                <div className="text-2xl font-bold">{overviewParticipant?.data?.completed ?? 0}</div>
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
-              <img src="/trophy.png" alt="campaign" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+              <img src="/trophy.png" alt="campaign" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
             <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{overviewParticipant?.pending_tasks ?? 0}</div>
+                <div className="text-2xl font-bold">{overviewParticipant?.data?.in_progress ?? 0}</div>
                 <p className="text-xs text-muted-foreground">Awaiting action</p>
               </CardContent>
-              <img src="/task.png" alt="money" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+              <img src="/task.png" alt="money" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
           </>
         ) : (
@@ -88,7 +102,7 @@ const Dashboard = () => {
                 <div className="text-2xl font-bold">{overview?.active_campaigns ?? 0}</div>
                 <p className="text-xs text-muted-foreground">Currently running</p>
               </CardContent>
-              <img src="/campaign.png" alt="campaign" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+              <img src="/campaign.png" alt="campaign" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
             <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -98,7 +112,7 @@ const Dashboard = () => {
                 <div className="text-2xl font-bold">${overview?.data?.total_spent?.toLocaleString() ?? "0.00"}</div>
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
-              <img src="/money.png" alt="money" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+              <img src="/money.png" alt="money" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
           </>
         )}
@@ -112,8 +126,8 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {Array.isArray(tasks) && tasks.length > 0 ? (
-                tasks.slice(0, 8).map((t: any) => (
+              {filteredTasks.length > 0 ? (
+                filteredTasks.slice(0, 8).map((t: any) => (
                   <div key={t.id} className="border rounded-lg p-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
                     <div>
                       <div className="font-medium text-sm">{t.title || t.name}</div>

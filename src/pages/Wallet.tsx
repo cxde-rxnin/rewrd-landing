@@ -51,7 +51,7 @@ export default function Wallet() {
             <p className="text-muted-foreground mt-1">Manage your funds and transactions</p>
           </div>
           <div className="flex gap-3">
-            {user.account_type === "brand" && (
+            {(user.account_type === "brand" || user.account_type === "influencer") && (
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setOpen(true)}>
@@ -100,7 +100,7 @@ export default function Wallet() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2">
+        <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${user.account_type === 'influencer' ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
           <Card className="relative overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
@@ -109,7 +109,7 @@ export default function Wallet() {
               <div className="text-2xl font-bold">${wallet?.data?.balance?.toLocaleString() ?? "0.00"}</div>
               <p className="text-xs text-muted-foreground">Ready to use</p>
             </CardContent>
-            <img src="/coin.png" alt="Available Balance" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+            <img src="/coin.png" alt="Available Balance" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
           </Card>
 
           {/* Show Total Spent only for brands and influencers */}
@@ -122,7 +122,7 @@ export default function Wallet() {
                 <div className="text-2xl font-bold">${overview?.data?.total_spent?.toLocaleString() ?? "0.00"}</div>
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
-              <img src="/money.png" alt="Total Spent" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+              <img src="/money.png" alt="Total Spent" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
           )}
 
@@ -136,7 +136,7 @@ export default function Wallet() {
                 <div className="text-2xl font-bold">${wallet?.data?.total_earned?.toLocaleString() ?? "0.00"}</div>
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
-              <img src="/cash.png" alt="Total Earned" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{zIndex:0}} />
+              <img src="/cash.png" alt="Total Earned" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
           )}
         </div>

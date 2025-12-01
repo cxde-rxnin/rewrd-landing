@@ -7,7 +7,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import Wallet from './pages/Wallet';
-import Analytics from './pages/Analytics';
+import Settings from './pages/Settings';
 
 const App = () => {
   return (
@@ -21,7 +21,7 @@ const App = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/wallet" element={<Wallet />} />
-            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
       </Router>

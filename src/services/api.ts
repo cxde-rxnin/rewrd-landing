@@ -25,6 +25,19 @@ export async function apiFetch<T>(
 }
 
 // Auth endpoints
+export const UserAPI = {
+  get: (accessToken: string) =>
+    apiFetch<any>("/api/user", {}, accessToken),
+  update: (accessToken: string, data: any) =>
+    apiFetch<any>("/api/user", { method: "PATCH", body: JSON.stringify(data) }, accessToken),
+  getConnectedAccounts: (accessToken: string) =>
+    apiFetch<any[]>("/api/user/accounts", {}, accessToken),
+  connectAccount: (accessToken: string, data: any) =>
+    apiFetch<any>("/api/user/accounts", { method: "POST", body: JSON.stringify(data) }, accessToken),
+  disconnectAccount: (accessToken: string, id: string) =>
+    apiFetch(`/api/user/accounts/${id}`, { method: "DELETE" }, accessToken),
+};
+
 export const AuthAPI = {
   login: (data: { email: string; password: string }) =>
     apiFetch<{ access_token: string; refresh_token: string; user: any }>(
@@ -47,12 +60,8 @@ export const AuthAPI = {
       "/api/auth/refresh",
       { method: "PATCH", body: JSON.stringify({ refresh_token }) }
     ),
-};
-
-// User endpoints
-export const UserAPI = {
-  get: (accessToken: string) =>
-    apiFetch<any>("/api/user", {}, accessToken),
+  changePassword: (accessToken: string, data: any) =>
+    apiFetch("/api/auth/password-change", { method: "POST", body: JSON.stringify(data) }, accessToken),
 };
 
 // Dashboard endpoints
