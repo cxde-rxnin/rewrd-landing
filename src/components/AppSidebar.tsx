@@ -1,4 +1,4 @@
-import { Home, LogOut, BarChart3, ListChecks, Wallet, Sparkles, ChevronLeft, Settings } from "lucide-react";
+import { Home, LogOut, ListChecks, Wallet, Sparkles, ChevronLeft, Settings } from "lucide-react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
@@ -15,7 +15,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/api/useAuth";
-import React from "react";
 
 const items = [
   {
