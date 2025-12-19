@@ -4,9 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { UserAPI, AuthAPI, TaskAPI } from "@/services/api";
+import { UserAPI, AuthAPI, SocialAPI } from "@/services/api";
 import { toast } from "sonner";
-import { User, Shield, Link as LinkIcon, Twitter, Instagram, Facebook, Linkedin, Youtube, Globe, Video } from "lucide-react";
+import { User, Shield, Link as LinkIcon, Facebook, Video } from "lucide-react";
 
 export default function Settings() {
     const { user, accessToken, setUser } = useAuth();
@@ -205,64 +205,51 @@ function SecuritySettings({ accessToken }: { accessToken: string | null }) {
     );
 }
 
-// Helper to get icon based on platform name
-const getPlatformIcon = (platformName: string) => {
-    const name = platformName.toLowerCase();
-    if (name.includes("twitter") || name.includes("x")) return <Twitter className="w-5 h-5" />;
-    if (name.includes("instagram")) return <Instagram className="w-5 h-5" />;
-    if (name.includes("facebook")) return <Facebook className="w-5 h-5" />;
-    if (name.includes("linkedin")) return <Linkedin className="w-5 h-5" />;
-    if (name.includes("youtube")) return <Youtube className="w-5 h-5" />;
-    if (name.includes("tiktok")) return <Video className="w-5 h-5" />;
-    return <Globe className="w-5 h-5" />;
-};
-
 function AccountSettings({ accessToken }: { accessToken: string | null }) {
     const [loading, setLoading] = useState(false);
-    const [platforms, setPlatforms] = useState<any[]>([]);
+    const [fetchingAccounts, setFetchingAccounts] = useState(false);
     const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
 
     useEffect(() => {
         if (!accessToken) return;
         const fetchData = async () => {
+            setFetchingAccounts(true);
             try {
-                const [platformsData, accountsData] = await Promise.all([
-                    TaskAPI.getSocialPlatforms(accessToken),
-                    UserAPI.getConnectedAccounts(accessToken).catch(() => []) // Handle error if endpoint doesn't exist yet
-                ]);
-
-                const platformsArr = Array.isArray(platformsData) ? platformsData : (platformsData && Array.isArray((platformsData as any).data) ? (platformsData as any).data : []);
-                setPlatforms(platformsArr);
-
+                const accountsData = await SocialAPI.list(accessToken);
+                console.log("[AccountSettings] SocialAPI.list response:", accountsData);
                 const accountsArr = Array.isArray(accountsData) ? accountsData : (accountsData && Array.isArray((accountsData as any).data) ? (accountsData as any).data : []);
                 setConnectedAccounts(accountsArr);
-            } catch (err) {
-                console.error("Failed to fetch account settings data", err);
+            } catch (err: any) {
+                console.error("Failed to fetch social accounts", err);
+                if (err?.message === "Send valid token" || err?.status === 401) {
+                    toast.error("Session expired. Please log in again.");
+                }
+            } finally {
+                setFetchingAccounts(false);
             }
         };
         fetchData();
     }, [accessToken]);
 
-    const handleConnect = async (platformId: string) => {
-        if (!accessToken) return;
-        setLoading(true);
-        try {
-            await UserAPI.connectAccount(accessToken, { platform_id: platformId });
-            toast.success("Account connected");
-            const accounts = await UserAPI.getConnectedAccounts(accessToken);
-            setConnectedAccounts(Array.isArray(accounts) ? accounts : []);
-        } catch (err: any) {
-            toast.error(err?.message || "Failed to connect account");
-        } finally {
-            setLoading(false);
+    const handleConnectFacebook = () => {
+        if (!accessToken) {
+            toast.error("Please log in to connect your Facebook account");
+            return;
         }
+        SocialAPI.facebookLogin(accessToken);
     };
-
+    const handleConnectTiktok = () => {
+        if (!accessToken) {
+            toast.error("Please log in to connect your TikTok account");
+            return;
+        }
+        SocialAPI.tiktokLogin(accessToken);
+    };
     const handleDisconnect = async (accountId: string) => {
         if (!accessToken) return;
         setLoading(true);
         try {
-            await UserAPI.disconnectAccount(accessToken, accountId);
+            await SocialAPI.delete(accessToken, accountId);
             toast.success("Account disconnected");
             setConnectedAccounts(prev => prev.filter(a => a.id !== accountId));
         } catch (err: any) {
@@ -280,36 +267,57 @@ function AccountSettings({ accessToken }: { accessToken: string | null }) {
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
-                    {platforms.map(platform => {
-                        const connected = connectedAccounts.find(a => a.platform_id === platform.id);
-                        return (
-                            <div key={platform.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                                        {getPlatformIcon(platform.name)}
-                                    </div>
-                                    <div>
-                                        <div className="font-medium">{platform.name}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {connected ? "Connected" : "Not connected"}
-                                        </div>
-                                    </div>
-                                </div>
-                                {connected ? (
-                                    <Button variant="outline" size="sm" onClick={() => handleDisconnect(connected.id)} disabled={loading}>
-                                        Disconnect
-                                    </Button>
-                                ) : (
-                                    <Button size="sm" onClick={() => handleConnect(platform.id)} disabled={loading}>
-                                        Connect
-                                    </Button>
-                                )}
+                    <div className="flex flex-col md:flex-row items-flex-start md:items-center justify-between p-3 border rounded-lg gap-3">
+                        <div className="flex items-center gap-5 md:gap-3">
+                            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                                <Facebook className="w-5 h-5" />
                             </div>
-                        );
-                    })}
-                    {platforms.length === 0 && (
+                            <div>
+                                <div className="font-medium">Facebook</div>
+                                <div className="text-xs text-muted-foreground">
+                                    {connectedAccounts.some(a => a.platform === 'facebook') ? "Connected" : "Not connected"}
+                                </div>
+                            </div>
+                        </div>
+                        {connectedAccounts.some(a => a.platform === 'facebook') ? (
+                            <Button variant="outline" size="sm" onClick={() => handleDisconnect(connectedAccounts.find(a => a.platform === 'facebook').id)} disabled={loading}>
+                                Disconnect
+                            </Button>
+                        ) : (
+                            <Button size="sm" onClick={handleConnectFacebook} disabled={loading}>
+                                Connect
+                            </Button>
+                        )}
+                    </div>
+                    <div className="flex flex-col md:flex-row items-flex-start md:items-center justify-between p-3 border rounded-lg gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                                <Video className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <div className="font-medium">TikTok</div>
+                                <div className="text-xs text-muted-foreground">
+                                    {connectedAccounts.some(a => a.platform === 'tiktok') ? "Connected" : "Not connected"}
+                                </div>
+                            </div>
+                        </div>
+                        {connectedAccounts.some(a => a.platform === 'tiktok') ? (
+                            <Button variant="outline" size="sm" onClick={() => handleDisconnect(connectedAccounts.find(a => a.platform === 'tiktok').id)} disabled={loading}>
+                                Disconnect
+                            </Button>
+                        ) : (
+                            <Button size="sm" onClick={handleConnectTiktok} disabled={loading}>
+                                Connect
+                            </Button>
+                        )}
+                    </div>
+                    {fetchingAccounts ? (
                         <div className="text-center text-muted-foreground py-4">
-                            No platforms available.
+                            Loading accounts...
+                        </div>
+                    ) : connectedAccounts.length === 0 && (
+                        <div className="text-center text-muted-foreground py-4">
+                            No connected accounts.
                         </div>
                     )}
                 </div>

@@ -8,6 +8,7 @@ export async function apiFetch<T>(
   options: RequestInit = {},
   authToken?: string
 ): Promise<T> {
+  console.log('apiFetch: token =', authToken); // DEBUG: log token
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
@@ -94,4 +95,16 @@ export const WalletAPI = {
     apiFetch<any>("/api/wallet", {}, accessToken),
   fund: (accessToken: string, amount: number) =>
     apiFetch<any>("/api/wallet/fund", { method: "POST", body: JSON.stringify({ amount }) }, accessToken),
+};
+
+// Social endpoints
+export const SocialAPI = {
+  list: (accessToken: string) =>
+    apiFetch<any[]>("/api/social", {}, accessToken),
+  delete: (accessToken: string, id: string) =>
+    apiFetch(`/api/social/${id}`, { method: "DELETE" }, accessToken),
+  facebookLogin: (accessToken: string) =>
+    window.location.href = `${BASE_URL}/api/social/facebook?token=${encodeURIComponent(accessToken)}`,
+  tiktokLogin: (accessToken: string) =>
+    window.location.href = `${BASE_URL}/api/social/tiktok?token=${encodeURIComponent(accessToken)}`,
 };
