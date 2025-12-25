@@ -103,8 +103,200 @@ export const SocialAPI = {
     apiFetch<any[]>("/api/social", {}, accessToken),
   delete: (accessToken: string, id: string) =>
     apiFetch(`/api/social/${id}`, { method: "DELETE" }, accessToken),
-  facebookLogin: (accessToken: string) =>
-    window.location.href = `${BASE_URL}/api/social/facebook?token=${encodeURIComponent(accessToken)}`,
-  tiktokLogin: (accessToken: string) =>
-    window.location.href = `${BASE_URL}/api/social/tiktok?token=${encodeURIComponent(accessToken)}`,
+  facebookLogin: async (accessToken: string) => {
+    console.log('[SocialAPI] Initiating Facebook login...');
+
+    // Make a fetch request with Authorization header
+    // The backend will handle the redirect to Facebook OAuth
+    const response = await fetch(`${BASE_URL}/api/social/facebook`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      redirect: "manual", // Don't follow redirects automatically
+    });
+
+    console.log('[SocialAPI] Response status:', response.status, response.type);
+
+    // If backend returns a redirect, get the Location header
+    // Note: With redirect: "manual", status 0 with type "opaqueredirect" means a redirect occurred
+    if (response.type === 'opaqueredirect' || response.status === 0) {
+      console.log('[SocialAPI] Opaque redirect detected, following redirect...');
+      // For opaque redirects, we can't read headers, so we need to let browser follow it
+      // But we need to ensure token is in the request. Let's try a different approach.
+      sessionStorage.setItem('oauth_token', accessToken);
+      window.location.href = `${BASE_URL}/api/social/facebook`;
+      return;
+    }
+
+    if (response.status === 302 || response.status === 301 || response.status === 307 || response.status === 308) {
+      const redirectUrl = response.headers.get("Location");
+      console.log('[SocialAPI] Redirect URL:', redirectUrl);
+      if (redirectUrl) {
+        // Store token for when user comes back from OAuth
+        sessionStorage.setItem('oauth_token', accessToken);
+        window.location.href = redirectUrl;
+        return;
+      }
+    }
+
+    // If response is not a redirect, check if it's JSON with a URL
+    if (response.ok) {
+      try {
+        const text = await response.text();
+        console.log('[SocialAPI] Response text:', text);
+
+        // Try to parse as JSON
+        try {
+          const data = JSON.parse(text);
+          console.log('[SocialAPI] Response data:', data);
+
+          // Check for redirect URL in various possible fields
+          // Also check nested data object
+          const redirectUrl =
+            data.redirect_url ||
+            data.url ||
+            data.auth_url ||
+            data.authorization_url ||
+            data.login_url ||
+            data.data?.redirect_url ||
+            data.data?.url ||
+            data.data?.auth_url ||
+            data.data?.authorization_url ||
+            data.data?.login_url;
+
+          if (redirectUrl) {
+            sessionStorage.setItem('oauth_token', accessToken);
+            window.location.href = redirectUrl;
+            return;
+          }
+        } catch (jsonError) {
+          console.error('[SocialAPI] Response is not JSON');
+          // Check if it's HTML (might be the OAuth page itself)
+          if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+            console.log('[SocialAPI] Response appears to be HTML, redirecting directly');
+            sessionStorage.setItem('oauth_token', accessToken);
+            window.location.href = `${BASE_URL}/api/social/facebook`;
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('[SocialAPI] Failed to read response:', e);
+      }
+    }
+
+    // Try to get error details
+    let errorMessage = "Failed to initiate Facebook login";
+    if (!response.bodyUsed) {
+      try {
+        const errorText = await response.text();
+        console.log('[SocialAPI] Error response:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText ? errorText.substring(0, 100) : errorMessage;
+        }
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    console.error('[SocialAPI] Failed to initiate Facebook login:', response.status, errorMessage);
+    throw new Error(response.status === 401 ? "Invalid or expired token" : errorMessage);
+  },
+  tiktokLogin: async (accessToken: string) => {
+    console.log('[SocialAPI] Initiating TikTok login...');
+
+    const response = await fetch(`${BASE_URL}/api/social/tiktok`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      redirect: "manual",
+    });
+
+    console.log('[SocialAPI] Response status:', response.status, response.type);
+
+    // Handle opaque redirect
+    if (response.type === 'opaqueredirect' || response.status === 0) {
+      console.log('[SocialAPI] Opaque redirect detected, following redirect...');
+      sessionStorage.setItem('oauth_token', accessToken);
+      window.location.href = `${BASE_URL}/api/social/tiktok`;
+      return;
+    }
+
+    // If backend returns a redirect, get the Location header
+    if (response.status === 302 || response.status === 301 || response.status === 307 || response.status === 308) {
+      const redirectUrl = response.headers.get("Location");
+      console.log('[SocialAPI] Redirect URL:', redirectUrl);
+      if (redirectUrl) {
+        sessionStorage.setItem('oauth_token', accessToken);
+        window.location.href = redirectUrl;
+        return;
+      }
+    }
+
+    // If response is not a redirect, check if it's JSON with a URL
+    if (response.ok) {
+      try {
+        const text = await response.text();
+        console.log('[SocialAPI] Response text:', text);
+
+        // Try to parse as JSON
+        try {
+          const data = JSON.parse(text);
+          console.log('[SocialAPI] Response data:', data);
+
+          // Check for redirect URL in various possible fields
+          // Also check nested data object
+          const redirectUrl =
+            data.redirect_url ||
+            data.url ||
+            data.auth_url ||
+            data.authorization_url ||
+            data.login_url ||
+            data.data?.redirect_url ||
+            data.data?.url ||
+            data.data?.auth_url ||
+            data.data?.authorization_url ||
+            data.data?.login_url;
+
+          if (redirectUrl) {
+            sessionStorage.setItem('oauth_token', accessToken);
+            window.location.href = redirectUrl;
+            return;
+          }
+        } catch (jsonError) {
+          console.error('[SocialAPI] Response is not JSON');
+          // Check if it's HTML (might be the OAuth page itself)
+          if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+            console.log('[SocialAPI] Response appears to be HTML, redirecting directly');
+            sessionStorage.setItem('oauth_token', accessToken);
+            window.location.href = `${BASE_URL}/api/social/tiktok`;
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('[SocialAPI] Failed to read response:', e);
+      }
+    }
+
+    // Try to get error details
+    let errorMessage = "Failed to initiate TikTok login";
+    try {
+      const errorText = await response.text();
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch (e) {
+        errorMessage = errorText || errorMessage;
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    console.error('[SocialAPI] Failed to initiate TikTok login:', response.status, errorMessage);
+    throw new Error(response.status === 401 ? "Invalid or expired token" : errorMessage);
+  },
 };

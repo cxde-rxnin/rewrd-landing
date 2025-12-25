@@ -99,11 +99,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(async () => {
-    if (!accessToken || !refreshToken) return;
     setLoading(true);
     setError(null);
     try {
-      await AuthAPI.logout(accessToken, refreshToken);
+      if (accessToken && refreshToken) {
+        await AuthAPI.logout(accessToken, refreshToken);
+      }
+    } catch (e: any) {
+      console.log("[useAuth] logout API error (ignoring)", e);
+    } finally {
       setUser(null);
       setAccessToken(null);
       setRefreshToken(null);
@@ -111,11 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
       setLoading(false);
-      console.log("[useAuth] logout success");
-    } catch (e: any) {
-      setError(e?.message || "Logout failed");
-      setLoading(false);
-      console.log("[useAuth] logout error", e);
+      console.log("[useAuth] logout - local state cleared");
     }
   }, [accessToken, refreshToken]);
 

@@ -231,19 +231,33 @@ function AccountSettings({ accessToken }: { accessToken: string | null }) {
         fetchData();
     }, [accessToken]);
 
-    const handleConnectFacebook = () => {
+    const handleConnectFacebook = async () => {
         if (!accessToken) {
             toast.error("Please log in to connect your Facebook account");
             return;
         }
-        SocialAPI.facebookLogin(accessToken);
+        try {
+            setLoading(true);
+            await SocialAPI.facebookLogin(accessToken);
+        } catch (error: any) {
+            toast.error(error?.message || "Failed to connect Facebook account");
+        } finally {
+            setLoading(false);
+        }
     };
-    const handleConnectTiktok = () => {
+    const handleConnectTiktok = async () => {
         if (!accessToken) {
             toast.error("Please log in to connect your TikTok account");
             return;
         }
-        SocialAPI.tiktokLogin(accessToken);
+        try {
+            setLoading(true);
+            await SocialAPI.tiktokLogin(accessToken);
+        } catch (error: any) {
+            toast.error(error?.message || "Failed to connect TikTok account");
+        } finally {
+            setLoading(false);
+        }
     };
     const handleDisconnect = async (accountId: string) => {
         if (!accessToken) return;
