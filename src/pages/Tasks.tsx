@@ -35,40 +35,7 @@ export default function Tasks() {
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
     fetchTasks();
-    // Fetch user's submissions to populate submission states
-    fetchUserSubmissions();
   }, [initialized, user, accessToken, fetchTasks]);
-
-  const fetchUserSubmissions = async () => {
-    if (!accessToken) return;
-    try {
-      const response = await fetch('http://138.68.131.42:8000/api/submission', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const submissions = Array.isArray(data) ? data : data.data || [];
-        console.log('User submissions:', submissions);
-
-        // Build submission states from the API response
-        const states: any = {};
-        submissions.forEach((sub: any) => {
-          if (sub.task_id) {
-            states[sub.task_id] = {
-              status: sub.status || 'pending',
-              submissionId: sub.id,
-            };
-          }
-        });
-        setSubmissionStates(states);
-        console.log('Submission states populated:', states);
-      }
-    } catch (err) {
-      console.error('Failed to fetch user submissions:', err);
-    }
-  };
 
   // WebSocket subscription for real-time task updates
   useEffect(() => {
@@ -97,7 +64,7 @@ export default function Tasks() {
         toast.info("A task has been started by a participant");
         // Update submission state to in_progress
         if (eventData?.task_id) {
-          setSubmissionStates(prev => ({
+          setSubmissionStates((prev: any) => ({
             ...prev,
             [eventData.task_id]: { status: 'in_progress', submissionId: eventData.id }
           }));
@@ -110,7 +77,7 @@ export default function Tasks() {
         toast.info("A task submission has been received");
         // Update submission state to submitted
         if (eventData?.task_id) {
-          setSubmissionStates(prev => ({
+          setSubmissionStates((prev: any) => ({
             ...prev,
             [eventData.task_id]: { status: 'submitted', submissionId: eventData.id }
           }));
@@ -119,7 +86,7 @@ export default function Tasks() {
       } else if (eventType === "submission:updated" || eventType === "task:submission:updated") {
         // Handle submission status updates - update local state immediately
         if (eventData?.task_id) {
-          setSubmissionStates(prev => ({
+          setSubmissionStates((prev: any) => ({
             ...prev,
             [eventData.task_id]: { status: eventData.status, submissionId: eventData.id }
           }));
@@ -139,7 +106,7 @@ export default function Tasks() {
         toast.info(`Your task submission has been ${status}`);
         // Update submission state
         if (eventData?.task_id) {
-          setSubmissionStates(prev => ({
+          setSubmissionStates((prev: any) => ({
             ...prev,
             [eventData.task_id]: { status: status, submissionId: eventData.id }
           }));
@@ -500,9 +467,8 @@ export default function Tasks() {
                         <TaskActionButton
                           task={t}
                           accessToken={accessToken}
-                          fetchTasks={fetchTasks}
                           submissionState={submissionStates[t.id]}
-                          onSubmissionStateChange={(state) => setSubmissionStates(prev => ({ ...prev, [t.id]: state }))}
+                          onSubmissionStateChange={(state) => setSubmissionStates((prev: any) => ({ ...prev, [t.id]: state }))}
                         />
                       )}
                       {(user.account_type === "brand" || user.account_type === "influencer") && (
@@ -553,21 +519,15 @@ export default function Tasks() {
 function TaskActionButton({
   task,
   accessToken,
-  fetchTasks,
   submissionState,
   onSubmissionStateChange,
 }: {
   task: any;
   accessToken: string | null;
-  fetchTasks: () => void;
   submissionState?: any;
   onSubmissionStateChange?: (state: any) => void;
 }) {
   const [loading, setLoading] = useState(false);
-
-  // Debug: log task object to see all fields
-  console.log('TaskActionButton - Task object:', task);
-  console.log('TaskActionButton - Submission state:', submissionState);
 
   // Determine task state
   const isCompleted = !!task.has_completed;
@@ -578,8 +538,6 @@ function TaskActionButton({
 
   // Check if task has been submitted (waiting for review)
   const hasSubmitted = submissionState?.status === 'pending' || submissionState?.status === 'submitted';
-
-  console.log('TaskActionButton - States:', { isActive, isCompleted, hasStarted, hasSubmitted });
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
@@ -592,12 +550,12 @@ function TaskActionButton({
       }
       if (accessToken) {
         const result = await TaskAPI.submit(accessToken, task.id, "start");
-        // Update local state immediately
+
+        // Update local state to show "Submit Task" button
         if (onSubmissionStateChange) {
-          onSubmissionStateChange({ status: 'in_progress', submissionId: result?.id });
+          onSubmissionStateChange({ status: 'in_progress', submissionId: result?.id || result?.data?.id });
         }
         toast.success("Task started! You can now submit your work.");
-        // Don't refetch immediately - wait for WebSocket update
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to start task");
@@ -611,12 +569,12 @@ function TaskActionButton({
     try {
       if (accessToken) {
         const result = await TaskAPI.submit(accessToken, task.id, "submit");
-        // Update local state immediately
+
+        // Update local state to show "Submitted (Pending Review)"
         if (onSubmissionStateChange) {
-          onSubmissionStateChange({ status: 'submitted', submissionId: result?.id });
+          onSubmissionStateChange({ status: 'pending', submissionId: result?.id || result?.data?.id });
         }
         toast.success("Task submitted! Waiting for review.");
-        // Don't refetch immediately - wait for WebSocket update
       } else {
         toast.error("No access token");
       }
