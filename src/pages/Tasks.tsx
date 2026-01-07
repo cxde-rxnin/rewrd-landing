@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/api/useAuth";
 import { useTasks } from "@/hooks/api/useTasks";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ListChecks, Filter, Plus, Heart, Pencil, Trash2 } from "lucide-react";
@@ -12,6 +13,7 @@ import { Toaster, toast } from "sonner";
 export default function Tasks() {
   const { user, accessToken, initialized } = useAuth();
   const { tasks, fetchTasks, createTask } = useTasks(accessToken);
+  const { isConnected, subscribe } = useWebSocket(accessToken);
   const [open, setOpen] = useState(false);
   const [platforms, setPlatforms] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
@@ -27,11 +29,130 @@ export default function Tasks() {
   });
   const [loading, setLoading] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  // Track submission states by task ID: { [taskId]: { status: 'pending'|'in_progress'|'submitted', submissionId: string } }
+  const [submissionStates, setSubmissionStates] = useState<any>({});
 
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
     fetchTasks();
+    // Fetch user's submissions to populate submission states
+    fetchUserSubmissions();
   }, [initialized, user, accessToken, fetchTasks]);
+
+  const fetchUserSubmissions = async () => {
+    if (!accessToken) return;
+    try {
+      const response = await fetch('http://138.68.131.42:8000/api/submission', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const submissions = Array.isArray(data) ? data : data.data || [];
+        console.log('User submissions:', submissions);
+
+        // Build submission states from the API response
+        const states: any = {};
+        submissions.forEach((sub: any) => {
+          if (sub.task_id) {
+            states[sub.task_id] = {
+              status: sub.status || 'pending',
+              submissionId: sub.id,
+            };
+          }
+        });
+        setSubmissionStates(states);
+        console.log('Submission states populated:', states);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user submissions:', err);
+    }
+  };
+
+  // WebSocket subscription for real-time task updates
+  useEffect(() => {
+    if (!accessToken) return undefined;
+
+    const unsubscribe = subscribe((message) => {
+      console.log("WebSocket message received:", message);
+
+      // Support both old format (type) and new format (event)
+      const eventType = message.event || message.type;
+      const eventData = message.data || message;
+
+      console.log("Event type:", eventType);
+
+      // Handle different types of task-related events
+      if (eventType === "task:created" || eventType === "task_created") {
+        toast.success("New task available!");
+        fetchTasks();
+      } else if (eventType === "task:updated" || eventType === "task_updated") {
+        toast.info("A task has been updated");
+        fetchTasks();
+      } else if (eventType === "task:deleted" || eventType === "task_deleted") {
+        toast.info("A task has been removed");
+        fetchTasks();
+      } else if (eventType === "task:started" || eventType === "task_started" || eventType === "task_claimed") {
+        toast.info("A task has been started by a participant");
+        // Update submission state to in_progress
+        if (eventData?.task_id) {
+          setSubmissionStates(prev => ({
+            ...prev,
+            [eventData.task_id]: { status: 'in_progress', submissionId: eventData.id }
+          }));
+        }
+        fetchTasks();
+      } else if (eventType === "task:status_changed" || eventType === "task_status_changed") {
+        toast.info(`Task status changed to ${eventData.status}`);
+        fetchTasks();
+      } else if (eventType === "submission:created" || eventType === "submission_created" || eventType === "task:submitted" || eventType === "task_submitted") {
+        toast.info("A task submission has been received");
+        // Update submission state to submitted
+        if (eventData?.task_id) {
+          setSubmissionStates(prev => ({
+            ...prev,
+            [eventData.task_id]: { status: 'submitted', submissionId: eventData.id }
+          }));
+        }
+        fetchTasks();
+      } else if (eventType === "submission:updated" || eventType === "task:submission:updated") {
+        // Handle submission status updates - update local state immediately
+        if (eventData?.task_id) {
+          setSubmissionStates(prev => ({
+            ...prev,
+            [eventData.task_id]: { status: eventData.status, submissionId: eventData.id }
+          }));
+        }
+
+        if (eventData?.status === "approved") {
+          toast.success("Your task submission has been approved!");
+        } else if (eventData?.status === "rejected") {
+          toast.error("Your task submission was rejected");
+        } else if (eventData?.status === "pending") {
+          toast.info("Your task submission is pending review");
+        }
+        fetchTasks();
+      } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected") {
+        const status = eventType === "submission:approved" || eventType === "submission_approved" ? "approved" :
+                      eventType === "submission:rejected" || eventType === "submission_rejected" ? "rejected" : "reviewed";
+        toast.info(`Your task submission has been ${status}`);
+        // Update submission state
+        if (eventData?.task_id) {
+          setSubmissionStates(prev => ({
+            ...prev,
+            [eventData.task_id]: { status: status, submissionId: eventData.id }
+          }));
+        }
+        fetchTasks();
+      } else if (eventType === "task:completed" || eventType === "task_completed") {
+        toast.success("A task has been completed!");
+        fetchTasks();
+      }
+    });
+
+    return unsubscribe;
+  }, [accessToken, subscribe, fetchTasks]);
 
   useEffect(() => {
     if (Array.isArray(tasks)) {
@@ -130,7 +251,19 @@ export default function Tasks() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
-            <p className="text-muted-foreground mt-1">Manage and track your tasks</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-muted-foreground">Manage and track your tasks</p>
+              <div className="flex items-center gap-2 text-sm">
+                <div
+                  className={`h-2 w-2 rounded-full ${
+                    isConnected ? "bg-green-500" : "bg-red-500"
+                  }`}
+                />
+                <span className="text-muted-foreground">
+                  {isConnected ? "Live" : "Offline"}
+                </span>
+              </div>
+            </div>
           </div>
           {(user.account_type === "brand" || user.account_type === "influencer") && (
             <Dialog open={open} onOpenChange={setOpen}>
@@ -364,7 +497,13 @@ export default function Tasks() {
                         </div>
                       </div>
                       {user.account_type === "participant" && (
-                        <TaskActionButton task={t} accessToken={accessToken} fetchTasks={fetchTasks} />
+                        <TaskActionButton
+                          task={t}
+                          accessToken={accessToken}
+                          fetchTasks={fetchTasks}
+                          submissionState={submissionStates[t.id]}
+                          onSubmissionStateChange={(state) => setSubmissionStates(prev => ({ ...prev, [t.id]: state }))}
+                        />
                       )}
                       {(user.account_type === "brand" || user.account_type === "influencer") && (
                         <div className="flex gap-2 mt-2 py-4 px-4">
@@ -411,13 +550,36 @@ export default function Tasks() {
   );
 }
 
-function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; accessToken: string | null; fetchTasks: () => void }) {
+function TaskActionButton({
+  task,
+  accessToken,
+  fetchTasks,
+  submissionState,
+  onSubmissionStateChange,
+}: {
+  task: any;
+  accessToken: string | null;
+  fetchTasks: () => void;
+  submissionState?: any;
+  onSubmissionStateChange?: (state: any) => void;
+}) {
   const [loading, setLoading] = useState(false);
 
-  // Use has_completed and is_active to determine button state
+  // Debug: log task object to see all fields
+  console.log('TaskActionButton - Task object:', task);
+  console.log('TaskActionButton - Submission state:', submissionState);
+
+  // Determine task state
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
-  const isInProgress = task.status === 'in_progress' || task.status === 'pending';
+
+  // Check if task has been started using the submission state
+  const hasStarted = submissionState?.status === 'in_progress' || submissionState?.status === 'submitted' || submissionState?.status === 'pending';
+
+  // Check if task has been submitted (waiting for review)
+  const hasSubmitted = submissionState?.status === 'pending' || submissionState?.status === 'submitted';
+
+  console.log('TaskActionButton - States:', { isActive, isCompleted, hasStarted, hasSubmitted });
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
@@ -429,9 +591,13 @@ function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; access
         window.open(task.url, "_blank");
       }
       if (accessToken) {
-        await TaskAPI.submit(accessToken, task.id, "start");
-        toast.success("Task started! You can now complete the task.");
-        fetchTasks();
+        const result = await TaskAPI.submit(accessToken, task.id, "start");
+        // Update local state immediately
+        if (onSubmissionStateChange) {
+          onSubmissionStateChange({ status: 'in_progress', submissionId: result?.id });
+        }
+        toast.success("Task started! You can now submit your work.");
+        // Don't refetch immediately - wait for WebSocket update
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to start task");
@@ -440,18 +606,22 @@ function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; access
     }
   };
 
-  const handleComplete = async () => {
+  const handleSubmit = async () => {
     setLoading(true);
     try {
       if (accessToken) {
-        await TaskAPI.submit(accessToken, task.id, "complete");
-        toast.success("Task completed!");
-        fetchTasks();
+        const result = await TaskAPI.submit(accessToken, task.id, "submit");
+        // Update local state immediately
+        if (onSubmissionStateChange) {
+          onSubmissionStateChange({ status: 'submitted', submissionId: result?.id });
+        }
+        toast.success("Task submitted! Waiting for review.");
+        // Don't refetch immediately - wait for WebSocket update
       } else {
         toast.error("No access token");
       }
     } catch (err: any) {
-      toast.error(err?.message || "Failed to complete task");
+      toast.error(err?.message || "Failed to submit task");
     } finally {
       setLoading(false);
     }
@@ -459,7 +629,7 @@ function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; access
 
   return (
     <div className="px-5 pb-5">
-      {!isInProgress ? (
+      {!hasStarted ? (
         <Button
           className="w-full bg-black text-white hover:bg-neutral-800"
           variant={undefined}
@@ -469,15 +639,24 @@ function TaskActionButton({ task, accessToken, fetchTasks }: { task: any; access
         >
           {loading ? "Starting..." : "Begin Task"}
         </Button>
-      ) : (
+      ) : !hasSubmitted ? (
         <Button
-          className="w-full bg-green-700 text-white hover:bg-green-800"
+          className="w-full bg-blue-600 text-white hover:bg-blue-700"
           variant={undefined}
           size="sm"
-          onClick={handleComplete}
+          onClick={handleSubmit}
           disabled={loading}
         >
-          {loading ? "Completing..." : "Complete Task"}
+          {loading ? "Submitting..." : "Submit Task"}
+        </Button>
+      ) : (
+        <Button
+          className="w-full bg-amber-600 text-white hover:bg-amber-700"
+          variant={undefined}
+          size="sm"
+          disabled={true}
+        >
+          Submitted (Pending Review)
         </Button>
       )}
     </div>

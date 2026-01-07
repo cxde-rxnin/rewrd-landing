@@ -2,6 +2,7 @@
 // Handles authentication, user, dashboard, task, wallet endpoints
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://138.68.131.42:8000";
+export const WS_URL = import.meta.env.VITE_WS_URL || "wss://api.partnerpulse.us/ws";
 
 export async function apiFetch<T>(
   endpoint: string,
