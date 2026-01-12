@@ -32,6 +32,18 @@ export default function Tasks() {
   // Track submission states by task ID: { [taskId]: { status: 'pending'|'in_progress'|'submitted', submissionId: string } }
   const [submissionStates, setSubmissionStates] = useState<any>({});
 
+  // Load started tasks from localStorage on mount
+  useEffect(() => {
+    const savedTasks = localStorage.getItem('started_tasks');
+    if (savedTasks) {
+      try {
+        setSubmissionStates(JSON.parse(savedTasks));
+      } catch (e) {
+        console.error('Failed to parse started tasks from localStorage', e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
     fetchTasks();
@@ -533,34 +545,40 @@ function TaskActionButton({
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
 
-  // Check if task has been started using the submission state
-  const hasStarted = submissionState?.status === 'in_progress' || submissionState?.status === 'submitted' || submissionState?.status === 'pending';
+  // Check if task has been started (local state only)
+  const hasStarted = submissionState?.status === 'in_progress';
 
-  // Check if task has been submitted (waiting for review)
-  const hasSubmitted = submissionState?.status === 'pending' || submissionState?.status === 'submitted';
+  // Check if task has been submitted to backend
+  const isSubmitted = submissionState?.status === 'submitted' || submissionState?.status === 'pending';
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
 
   const handleBegin = async () => {
-    setLoading(true);
     try {
       if (task.url) {
         window.open(task.url, "_blank");
       }
+
       if (accessToken) {
+        // Call API with action=start to create the submission
         const result = await TaskAPI.submit(accessToken, task.id, "start");
 
-        // Update local state to show "Submit Task" button
+        // Mark task as in_progress and store the submission ID
+        const newState = { status: 'in_progress', submissionId: result?.id || result?.data?.id };
         if (onSubmissionStateChange) {
-          onSubmissionStateChange({ status: 'in_progress', submissionId: result?.id || result?.data?.id });
+          onSubmissionStateChange(newState);
         }
-        toast.success("Task started! You can now submit your work.");
+
+        // Persist to localStorage for session persistence
+        const startedTasks = JSON.parse(localStorage.getItem('started_tasks') || '{}');
+        startedTasks[task.id] = newState;
+        localStorage.setItem('started_tasks', JSON.stringify(startedTasks));
+
+        toast.success("Task started! Complete it and come back to submit.");
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to start task");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -568,15 +586,19 @@ function TaskActionButton({
     setLoading(true);
     try {
       if (accessToken) {
-        const result = await TaskAPI.submit(accessToken, task.id, "submit");
-
-        // Update local state to show "Submitted (Pending Review)"
+        // Just mark the submission as completed locally
+        // The backend already has the submission from action=start
+        const newState = { status: 'pending', submissionId: submissionState?.submissionId };
         if (onSubmissionStateChange) {
-          onSubmissionStateChange({ status: 'pending', submissionId: result?.id || result?.data?.id });
+          onSubmissionStateChange(newState);
         }
+
+        // Persist to localStorage
+        const startedTasks = JSON.parse(localStorage.getItem('started_tasks') || '{}');
+        startedTasks[task.id] = newState;
+        localStorage.setItem('started_tasks', JSON.stringify(startedTasks));
+
         toast.success("Task submitted! Waiting for review.");
-      } else {
-        toast.error("No access token");
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to submit task");
@@ -587,17 +609,16 @@ function TaskActionButton({
 
   return (
     <div className="px-5 pb-5">
-      {!hasStarted ? (
+      {!hasStarted && !isSubmitted ? (
         <Button
           className="w-full bg-black text-white hover:bg-neutral-800"
           variant={undefined}
           size="sm"
           onClick={handleBegin}
-          disabled={loading}
         >
-          {loading ? "Starting..." : "Begin Task"}
+          Begin Task
         </Button>
-      ) : !hasSubmitted ? (
+      ) : hasStarted && !isSubmitted ? (
         <Button
           className="w-full bg-blue-600 text-white hover:bg-blue-700"
           variant={undefined}
