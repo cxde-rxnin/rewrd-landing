@@ -34,15 +34,18 @@ export default function Tasks() {
 
   // Load started tasks from localStorage on mount
   useEffect(() => {
-    const savedTasks = localStorage.getItem('started_tasks');
+    if (!user?.id) return;
+    const savedTasks = localStorage.getItem(`started_tasks_${user.id}`);
     if (savedTasks) {
       try {
         setSubmissionStates(JSON.parse(savedTasks));
       } catch (e) {
         console.error('Failed to parse started tasks from localStorage', e);
       }
+    } else {
+      setSubmissionStates({});
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
@@ -76,32 +79,55 @@ export default function Tasks() {
         toast.info("A task has been started by a participant");
         // Update submission state to in_progress
         if (eventData?.task_id) {
-          setSubmissionStates((prev: any) => ({
-            ...prev,
-            [eventData.task_id]: { status: 'in_progress', submissionId: eventData.id }
-          }));
+          setSubmissionStates((prev: any) => {
+            const currentState = prev[eventData.task_id] || {};
+            return {
+              ...prev,
+              [eventData.task_id]: {
+                status: 'in_progress',
+                submissionId: eventData.id,
+                uiState: currentState.uiState
+              }
+            };
+          });
         }
         fetchTasks();
       } else if (eventType === "task:status_changed" || eventType === "task_status_changed") {
         toast.info(`Task status changed to ${eventData.status}`);
         fetchTasks();
       } else if (eventType === "submission:created" || eventType === "submission_created" || eventType === "task:submitted" || eventType === "task_submitted") {
+        console.log("Submission created event received:", eventData);
         toast.info("A task submission has been received");
-        // Update submission state to submitted
+        // Update submission state based on event status, default to in_progress (started) if not present
+        // We assume submission:created corresponds to "starting" a task if status is missing
         if (eventData?.task_id) {
-          setSubmissionStates((prev: any) => ({
-            ...prev,
-            [eventData.task_id]: { status: 'submitted', submissionId: eventData.id }
-          }));
+          setSubmissionStates((prev: any) => {
+            const currentState = prev[eventData.task_id] || {};
+            return {
+              ...prev,
+              [eventData.task_id]: {
+                status: eventData.status || 'in_progress',
+                submissionId: eventData.id,
+                uiState: currentState.uiState // Preserve existing uiState
+              }
+            };
+          });
         }
         fetchTasks();
       } else if (eventType === "submission:updated" || eventType === "task:submission:updated") {
         // Handle submission status updates - update local state immediately
         if (eventData?.task_id) {
-          setSubmissionStates((prev: any) => ({
-            ...prev,
-            [eventData.task_id]: { status: eventData.status, submissionId: eventData.id }
-          }));
+          setSubmissionStates((prev: any) => {
+            const currentState = prev[eventData.task_id] || {};
+            return {
+              ...prev,
+              [eventData.task_id]: {
+                status: eventData.status,
+                submissionId: eventData.id,
+                uiState: currentState.uiState
+              }
+            };
+          });
         }
 
         if (eventData?.status === "approved") {
@@ -114,14 +140,21 @@ export default function Tasks() {
         fetchTasks();
       } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected") {
         const status = eventType === "submission:approved" || eventType === "submission_approved" ? "approved" :
-                      eventType === "submission:rejected" || eventType === "submission_rejected" ? "rejected" : "reviewed";
+          eventType === "submission:rejected" || eventType === "submission_rejected" ? "rejected" : "reviewed";
         toast.info(`Your task submission has been ${status}`);
         // Update submission state
         if (eventData?.task_id) {
-          setSubmissionStates((prev: any) => ({
-            ...prev,
-            [eventData.task_id]: { status: status, submissionId: eventData.id }
-          }));
+          setSubmissionStates((prev: any) => {
+            const currentState = prev[eventData.task_id] || {};
+            return {
+              ...prev,
+              [eventData.task_id]: {
+                status: status,
+                submissionId: eventData.id,
+                uiState: currentState.uiState
+              }
+            };
+          });
         }
         fetchTasks();
       } else if (eventType === "task:completed" || eventType === "task_completed") {
@@ -234,9 +267,8 @@ export default function Tasks() {
               <p className="text-muted-foreground">Manage and track your tasks</p>
               <div className="flex items-center gap-2 text-sm">
                 <div
-                  className={`h-2 w-2 rounded-full ${
-                    isConnected ? "bg-green-500" : "bg-red-500"
-                  }`}
+                  className={`h-2 w-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"
+                    }`}
                 />
                 <span className="text-muted-foreground">
                   {isConnected ? "Live" : "Offline"}
@@ -481,6 +513,7 @@ export default function Tasks() {
                           accessToken={accessToken}
                           submissionState={submissionStates[t.id]}
                           onSubmissionStateChange={(state) => setSubmissionStates((prev: any) => ({ ...prev, [t.id]: state }))}
+                          userId={user.id}
                         />
                       )}
                       {(user.account_type === "brand" || user.account_type === "influencer") && (
@@ -533,11 +566,13 @@ function TaskActionButton({
   accessToken,
   submissionState,
   onSubmissionStateChange,
+  userId,
 }: {
   task: any;
   accessToken: string | null;
   submissionState?: any;
   onSubmissionStateChange?: (state: any) => void;
+  userId?: string;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -546,10 +581,14 @@ function TaskActionButton({
   const isActive = !!task.is_active;
 
   // Check if task has been started (local state only)
-  const hasStarted = submissionState?.status === 'in_progress';
+  // If uiState is explicitly 'started', treat as started regardless of status
+  const hasStarted = submissionState?.uiState === 'started' || submissionState?.status === 'in_progress';
 
   // Check if task has been submitted to backend
-  const isSubmitted = submissionState?.status === 'submitted' || submissionState?.status === 'pending';
+  // If uiState is explicitly 'started', it is NOT submitted even if status is pending
+  const isSubmitted = submissionState?.uiState === 'submitted' ||
+    (submissionState?.status === 'submitted' && submissionState?.uiState !== 'started') ||
+    (submissionState?.status === 'pending' && submissionState?.uiState !== 'started');
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
@@ -565,15 +604,18 @@ function TaskActionButton({
         const result = await TaskAPI.submit(accessToken, task.id, "start");
 
         // Mark task as in_progress and store the submission ID
-        const newState = { status: 'in_progress', submissionId: result?.id || result?.data?.id };
+        // Set uiState to 'started' to explicitly track that user has only started the task
+        const newState = { status: 'in_progress', submissionId: result?.id || result?.data?.id, uiState: 'started' };
         if (onSubmissionStateChange) {
           onSubmissionStateChange(newState);
         }
 
         // Persist to localStorage for session persistence
-        const startedTasks = JSON.parse(localStorage.getItem('started_tasks') || '{}');
-        startedTasks[task.id] = newState;
-        localStorage.setItem('started_tasks', JSON.stringify(startedTasks));
+        if (userId) {
+          const startedTasks = JSON.parse(localStorage.getItem(`started_tasks_${userId}`) || '{}');
+          startedTasks[task.id] = newState;
+          localStorage.setItem(`started_tasks_${userId}`, JSON.stringify(startedTasks));
+        }
 
         toast.success("Task started! Complete it and come back to submit.");
       }
@@ -586,17 +628,22 @@ function TaskActionButton({
     setLoading(true);
     try {
       if (accessToken) {
-        // Just mark the submission as completed locally
-        // The backend already has the submission from action=start
-        const newState = { status: 'pending', submissionId: submissionState?.submissionId };
+        // Call API with action=complete to finalize the submission
+        const result = await TaskAPI.submit(accessToken, task.id, "complete");
+
+        // Update local state to submitted
+        // Set uiState to 'submitted' to explicitly track that user has submitted the task
+        const newState = { status: 'submitted', submissionId: result?.id || result?.data?.id || submissionState?.submissionId, uiState: 'submitted' };
         if (onSubmissionStateChange) {
           onSubmissionStateChange(newState);
         }
 
         // Persist to localStorage
-        const startedTasks = JSON.parse(localStorage.getItem('started_tasks') || '{}');
-        startedTasks[task.id] = newState;
-        localStorage.setItem('started_tasks', JSON.stringify(startedTasks));
+        if (userId) {
+          const startedTasks = JSON.parse(localStorage.getItem(`started_tasks_${userId}`) || '{}');
+          startedTasks[task.id] = newState;
+          localStorage.setItem(`started_tasks_${userId}`, JSON.stringify(startedTasks));
+        }
 
         toast.success("Task submitted! Waiting for review.");
       }
