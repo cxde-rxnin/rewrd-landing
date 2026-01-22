@@ -88,6 +88,8 @@ export const TaskAPI = {
     apiFetch(`/api/task/${id}`, { method: "DELETE" }, accessToken),
   submit: (accessToken: string, id: string, action: string) =>
     apiFetch<any>(`/api/task/${id}/submission?action=${action}`, { method: "POST", body: JSON.stringify({}) }, accessToken),
+  getSubmissionStatus: (accessToken: string, id: string) =>
+    apiFetch<any>(`/api/task/${id}/submission`, {}, accessToken),
 };
 
 // Wallet endpoints

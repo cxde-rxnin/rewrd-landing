@@ -136,6 +136,9 @@ export default function Tasks() {
           toast.error("Your task submission was rejected");
         } else if (eventData?.status === "pending") {
           toast.info("Your task submission is pending review");
+        } else {
+          // Default notification for other status changes (e.g., started, in_progress, or missing status)
+          toast.info("Task submission updated");
         }
         fetchTasks();
       } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected") {
