@@ -68,13 +68,10 @@ export default function Tasks() {
       // Handle different types of task-related events
       if (eventType === "task:created" || eventType === "task_created") {
         toast.success("New task available!");
-        fetchTasks();
       } else if (eventType === "task:updated" || eventType === "task_updated") {
         toast.info("A task has been updated");
-        fetchTasks();
       } else if (eventType === "task:deleted" || eventType === "task_deleted") {
         toast.info("A task has been removed");
-        fetchTasks();
       } else if (eventType === "task:started" || eventType === "task_started" || eventType === "task_claimed") {
         toast.info("A task has been started by a participant");
         // Update submission state to in_progress
@@ -91,10 +88,8 @@ export default function Tasks() {
             };
           });
         }
-        fetchTasks();
       } else if (eventType === "task:status_changed" || eventType === "task_status_changed") {
         toast.info(`Task status changed to ${eventData.status}`);
-        fetchTasks();
       } else if (eventType === "submission:created" || eventType === "submission_created" || eventType === "task:submitted" || eventType === "task_submitted") {
         console.log("Submission created event received:", eventData);
         toast.info("A task submission has been received");
@@ -113,7 +108,6 @@ export default function Tasks() {
             };
           });
         }
-        fetchTasks();
       } else if (eventType === "submission:updated" || eventType === "task:submission:updated") {
         // Handle submission status updates - update local state immediately
         if (eventData?.task_id) {
@@ -140,7 +134,6 @@ export default function Tasks() {
           // Default notification for other status changes (e.g., started, in_progress, or missing status)
           toast.info("Task submission updated");
         }
-        fetchTasks();
       } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected") {
         const status = eventType === "submission:approved" || eventType === "submission_approved" ? "approved" :
           eventType === "submission:rejected" || eventType === "submission_rejected" ? "rejected" : "reviewed";
@@ -159,15 +152,13 @@ export default function Tasks() {
             };
           });
         }
-        fetchTasks();
       } else if (eventType === "task:completed" || eventType === "task_completed") {
         toast.success("A task has been completed!");
-        fetchTasks();
       }
     });
 
     return unsubscribe;
-  }, [accessToken, subscribe, fetchTasks]);
+  }, [accessToken, subscribe]);
 
   useEffect(() => {
     if (Array.isArray(tasks)) {
@@ -578,6 +569,7 @@ function TaskActionButton({
   userId?: string;
 }) {
   const [loading, setLoading] = useState(false);
+  const [proofUrl, setProofUrl] = useState<string>("");
 
   // Determine task state
   const isCompleted = !!task.has_completed;
@@ -631,8 +623,13 @@ function TaskActionButton({
     setLoading(true);
     try {
       if (accessToken) {
+        if (!proofUrl.trim()) {
+          toast.error("Please provide proof URL (e.g., link to your post or screenshot)");
+          return;
+        }
+
         // Call API with action=complete to finalize the submission
-        const result = await TaskAPI.submit(accessToken, task.id, "complete");
+        const result = await TaskAPI.submit(accessToken, task.id, "complete", proofUrl);
 
         // Update local state to submitted
         // Set uiState to 'submitted' to explicitly track that user has submitted the task
@@ -658,7 +655,7 @@ function TaskActionButton({
   };
 
   return (
-    <div className="px-5 pb-5">
+    <div className="px-5 pb-5 space-y-2">
       {!hasStarted && !isSubmitted ? (
         <Button
           className="w-full bg-black text-white hover:bg-neutral-800"
@@ -669,15 +666,25 @@ function TaskActionButton({
           Begin Task
         </Button>
       ) : hasStarted && !isSubmitted ? (
-        <Button
-          className="w-full bg-blue-600 text-white hover:bg-blue-700"
-          variant={undefined}
-          size="sm"
-          onClick={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? "Submitting..." : "Submit Task"}
-        </Button>
+        <>
+          <input
+            type="text"
+            placeholder="Enter proof URL (link to your post/screenshot)"
+            value={proofUrl}
+            onChange={(e) => setProofUrl(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={loading}
+          />
+          <Button
+            className="w-full bg-blue-600 text-white hover:bg-blue-700"
+            variant={undefined}
+            size="sm"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? "Submitting..." : "Submit Task"}
+          </Button>
+        </>
       ) : (
         <Button
           className="w-full bg-amber-600 text-white hover:bg-amber-700"
