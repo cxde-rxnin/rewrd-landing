@@ -32,21 +32,6 @@ export default function Tasks() {
   // Track submission states by task ID: { [taskId]: { status: 'pending'|'in_progress'|'submitted', submissionId: string } }
   const [submissionStates, setSubmissionStates] = useState<any>({});
 
-  // Load started tasks from localStorage on mount
-  useEffect(() => {
-    if (!user?.id) return;
-    const savedTasks = localStorage.getItem(`started_tasks_${user.id}`);
-    if (savedTasks) {
-      try {
-        setSubmissionStates(JSON.parse(savedTasks));
-      } catch (e) {
-        console.error('Failed to parse started tasks from localStorage', e);
-      }
-    } else {
-      setSubmissionStates({});
-    }
-  }, [user?.id]);
-
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
     fetchTasks();
@@ -590,16 +575,23 @@ function TaskActionButton({
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
 
-  // Updated logic: treat 'pending', 'rejected', 'verifying' as started, not submitted
-  const hasStarted = submissionState?.uiState === 'started' ||
-    submissionState?.status === 'in_progress' ||
-    submissionState?.status === 'pending' ||
-    submissionState?.status === 'rejected' ||
-    submissionState?.status === 'verifying';
+  // Use can_start as a fallback for hasStarted if no submissionState or ambiguous state
+  let hasStarted = false;
+  let isSubmitted = false;
 
-  const isSubmitted = submissionState?.uiState === 'submitted' ||
-    submissionState?.status === 'submitted' && submissionState?.uiState !== 'started' ||
-    (submissionState?.status === 'pending' && submissionState?.uiState !== 'started');
+  if (submissionState) {
+    hasStarted = submissionState?.uiState === 'started' ||
+      submissionState?.status === 'in_progress' ||
+      submissionState?.status === 'pending' ||
+      submissionState?.status === 'rejected' ||
+      submissionState?.status === 'verifying';
+    isSubmitted = submissionState?.uiState === 'submitted' ||
+      (submissionState?.status === 'submitted' && submissionState?.uiState !== 'started') ||
+      (submissionState?.status === 'pending' && submissionState?.uiState !== 'started');
+  } else {
+    // If can_start is false, treat as started (unless completed)
+    hasStarted = task.can_start === false && !isCompleted;
+  }
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
@@ -609,25 +601,12 @@ function TaskActionButton({
       if (task.url) {
         window.open(task.url, "_blank");
       }
-
       if (accessToken) {
-        // Call API with action=start to create the submission
         const result = await TaskAPI.submit(accessToken, task.id, "start");
-
-        // Mark task as in_progress and store the submission ID
-        // Set uiState to 'started' to explicitly track that user has only started the task
         const newState = { status: 'in_progress', submissionId: result?.id || result?.data?.id, uiState: 'started' };
         if (onSubmissionStateChange) {
           onSubmissionStateChange(newState);
         }
-
-        // Persist to localStorage for session persistence
-        if (userId) {
-          const startedTasks = JSON.parse(localStorage.getItem(`started_tasks_${userId}`) || '{}');
-          startedTasks[task.id] = newState;
-          localStorage.setItem(`started_tasks_${userId}`, JSON.stringify(startedTasks));
-        }
-
         toast.success("Task started!");
       }
     } catch (err: any) {
@@ -639,23 +618,11 @@ function TaskActionButton({
     setLoading(true);
     try {
       if (accessToken) {
-        // Call API with action=complete to finalize the submission
         const result = await TaskAPI.submit(accessToken, task.id, "complete");
-
-        // Update local state to submitted
-        // Set uiState to 'submitted' to explicitly track that user has submitted the task
         const newState = { status: 'submitted', submissionId: result?.id || result?.data?.id || submissionState?.submissionId, uiState: 'submitted' };
         if (onSubmissionStateChange) {
           onSubmissionStateChange(newState);
         }
-
-        // Persist to localStorage
-        if (userId) {
-          const startedTasks = JSON.parse(localStorage.getItem(`started_tasks_${userId}`) || '{}');
-          startedTasks[task.id] = newState;
-          localStorage.setItem(`started_tasks_${userId}`, JSON.stringify(startedTasks));
-        }
-
         toast.success("Task submitted!");
       }
     } catch (err: any) {
