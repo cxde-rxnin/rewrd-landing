@@ -86,8 +86,13 @@ export const TaskAPI = {
     apiFetch<any[]>(`/api/task/task-type/${platformId}`, {}, accessToken),
   delete: (accessToken: string, id: string) =>
     apiFetch(`/api/task/${id}`, { method: "DELETE" }, accessToken),
-  submit: (accessToken: string, id: string, action: string, proofUrl?: string) =>
-    apiFetch<any>(`/api/task/${id}/submission?action=${action}`, { method: "POST", body: JSON.stringify({ proof_url: proofUrl || undefined }) }, accessToken),
+  submit: (accessToken: string, id: string, action: string) => {
+    console.log("TaskAPI.submit called with:", { id, action });
+    return apiFetch<any>(`/api/task/${id}/submission?action=${action}`, {
+      method: "POST",
+      body: JSON.stringify({})
+    }, accessToken);
+  },
   getSubmissionStatus: (accessToken: string, id: string) =>
     apiFetch<any>(`/api/task/${id}/submission`, {}, accessToken),
 };

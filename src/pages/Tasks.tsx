@@ -128,6 +128,22 @@ export default function Tasks() {
           toast.success("Your task submission has been approved!");
         } else if (eventData?.status === "rejected") {
           toast.error("Your task submission was rejected");
+          console.log("Submission rejected. Task ID:", eventData?.task_id, "User ID:", eventData?.user_id, "Submission ID:", eventData?.id);
+
+          // Fetch submission details for more information
+          if (accessToken && eventData?.task_id) {
+            TaskAPI.getSubmissionStatus(accessToken, eventData.task_id)
+              .then(submissionDetails => {
+                console.log("Rejected submission details:", submissionDetails);
+                // Check if there's a rejection reason in the response
+                if (submissionDetails?.rejection_reason) {
+                  toast.error(`Rejection reason: ${submissionDetails.rejection_reason}`);
+                }
+              })
+              .catch(err => {
+                console.error("Failed to fetch submission details:", err);
+              });
+          }
         } else if (eventData?.status === "pending") {
           toast.info("Your task submission is pending review");
         } else {
@@ -477,7 +493,7 @@ export default function Tasks() {
                           <h3 className="font-semibold text-lg leading-tight mb-1">{t.title || t.name}</h3>
                           <span className="text-xs text-muted-foreground">{t.platform || t.type}</span>
                         </div>
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${t.status === "completed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{t.status === "completed" ? "Completed" : "Pending"}</span>
+                        <TaskStatusBadge task={t} submissionState={submissionStates[t.id]} userType={user.account_type} />
                       </div>
                       <div className="px-5 py-3 flex-1">
                         <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{t.description}</p>
@@ -569,20 +585,20 @@ function TaskActionButton({
   userId?: string;
 }) {
   const [loading, setLoading] = useState(false);
-  const [proofUrl, setProofUrl] = useState<string>("");
 
   // Determine task state
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
 
-  // Check if task has been started (local state only)
-  // If uiState is explicitly 'started', treat as started regardless of status
-  const hasStarted = submissionState?.uiState === 'started' || submissionState?.status === 'in_progress';
+  // Updated logic: treat 'pending', 'rejected', 'verifying' as started, not submitted
+  const hasStarted = submissionState?.uiState === 'started' ||
+    submissionState?.status === 'in_progress' ||
+    submissionState?.status === 'pending' ||
+    submissionState?.status === 'rejected' ||
+    submissionState?.status === 'verifying';
 
-  // Check if task has been submitted to backend
-  // If uiState is explicitly 'started', it is NOT submitted even if status is pending
   const isSubmitted = submissionState?.uiState === 'submitted' ||
-    (submissionState?.status === 'submitted' && submissionState?.uiState !== 'started') ||
+    submissionState?.status === 'submitted' && submissionState?.uiState !== 'started' ||
     (submissionState?.status === 'pending' && submissionState?.uiState !== 'started');
 
   // Only show buttons if task is active and not completed
@@ -612,7 +628,7 @@ function TaskActionButton({
           localStorage.setItem(`started_tasks_${userId}`, JSON.stringify(startedTasks));
         }
 
-        toast.success("Task started! Complete it and come back to submit.");
+        toast.success("Task started!");
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to start task");
@@ -623,13 +639,8 @@ function TaskActionButton({
     setLoading(true);
     try {
       if (accessToken) {
-        if (!proofUrl.trim()) {
-          toast.error("Please provide proof URL (e.g., link to your post or screenshot)");
-          return;
-        }
-
         // Call API with action=complete to finalize the submission
-        const result = await TaskAPI.submit(accessToken, task.id, "complete", proofUrl);
+        const result = await TaskAPI.submit(accessToken, task.id, "complete");
 
         // Update local state to submitted
         // Set uiState to 'submitted' to explicitly track that user has submitted the task
@@ -645,7 +656,7 @@ function TaskActionButton({
           localStorage.setItem(`started_tasks_${userId}`, JSON.stringify(startedTasks));
         }
 
-        toast.success("Task submitted! Waiting for review.");
+        toast.success("Task submitted!");
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to submit task");
@@ -667,14 +678,6 @@ function TaskActionButton({
         </Button>
       ) : hasStarted && !isSubmitted ? (
         <>
-          <input
-            type="text"
-            placeholder="Enter proof URL (link to your post/screenshot)"
-            value={proofUrl}
-            onChange={(e) => setProofUrl(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={loading}
-          />
           <Button
             className="w-full bg-blue-600 text-white hover:bg-blue-700"
             variant={undefined}
@@ -692,9 +695,83 @@ function TaskActionButton({
           size="sm"
           disabled={true}
         >
-          Submitted (Pending Review)
+          Submitted
         </Button>
       )}
     </div>
+  );
+}
+
+function TaskStatusBadge({
+  task,
+  submissionState,
+  userType
+}: {
+  task: any;
+  submissionState?: any;
+  userType: string;
+}) {
+  // Determine the status to display
+  let status = task.status || "pending";
+  let displayText = "Pending";
+  let bgColor = "bg-amber-100";
+  let textColor = "text-amber-700";
+
+  // For participants, check submission status
+  if (userType === "participant" && submissionState) {
+    const submissionStatus = submissionState.status;
+    const uiState = submissionState.uiState;
+
+    // Check uiState first to distinguish between "started" and "submitted"
+    if (uiState === "started") {
+      // Task has been started but not submitted yet
+      status = "in_progress";
+      displayText = "In Progress";
+      bgColor = "bg-yellow-100";
+      textColor = "text-yellow-700";
+    } else if (submissionStatus === "approved" || submissionStatus === "completed") {
+      status = "completed";
+      displayText = "Completed";
+      bgColor = "bg-green-100";
+      textColor = "text-green-700";
+    } else if (submissionStatus === "rejected") {
+      status = "rejected";
+      displayText = "Rejected";
+      bgColor = "bg-red-100";
+      textColor = "text-red-700";
+    } else if (submissionStatus === "verifying") {
+      status = "verifying";
+      displayText = "Verifying";
+      bgColor = "bg-blue-100";
+      textColor = "text-blue-700";
+    } else if (submissionStatus === "submitted" || submissionStatus === "pending" || (submissionStatus === "in_progress" && uiState !== "started")) {
+      status = "submitted";
+      displayText = "Submitted";
+      bgColor = "bg-purple-100";
+      textColor = "text-purple-700";
+    } else if (submissionStatus === "in_progress") {
+      // Fallback for in_progress without uiState
+      status = "in_progress";
+      displayText = "In Progress";
+      bgColor = "bg-yellow-100";
+      textColor = "text-yellow-700";
+    }
+  } else {
+    // For brands/influencers, use task status
+    if (status === "completed") {
+      displayText = "Completed";
+      bgColor = "bg-green-100";
+      textColor = "text-green-700";
+    } else if (status === "active" || status === "available") {
+      displayText = "Active";
+      bgColor = "bg-blue-100";
+      textColor = "text-blue-700";
+    }
+  }
+
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-medium ${bgColor} ${textColor}`}>
+      {displayText}
+    </span>
   );
 }
