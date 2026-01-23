@@ -575,7 +575,7 @@ function TaskActionButton({
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
 
-  // Use can_start as a fallback for hasStarted if no submissionState or ambiguous state
+  // Use can_start and has_submitted as fallbacks for hasStarted/isSubmitted if no submissionState
   let hasStarted = false;
   let isSubmitted = false;
 
@@ -591,6 +591,8 @@ function TaskActionButton({
   } else {
     // If can_start is false, treat as started (unless completed)
     hasStarted = task.can_start === false && !isCompleted;
+    // If has_submitted is true, treat as submitted
+    isSubmitted = !!task.has_submitted;
   }
 
   // Only show buttons if task is active and not completed
@@ -723,6 +725,12 @@ function TaskStatusBadge({
       bgColor = "bg-yellow-100";
       textColor = "text-yellow-700";
     }
+  } else if (userType === "participant" && task.has_submitted) {
+    // Fallback: if has_submitted is true, show as Submitted
+    status = "submitted";
+    displayText = "Submitted";
+    bgColor = "bg-purple-100";
+    textColor = "text-purple-700";
   } else {
     // For brands/influencers, use task status
     if (status === "completed") {
