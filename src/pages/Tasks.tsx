@@ -508,7 +508,6 @@ export default function Tasks() {
                           accessToken={accessToken}
                           submissionState={submissionStates[t.id]}
                           onSubmissionStateChange={(state) => setSubmissionStates((prev: any) => ({ ...prev, [t.id]: state }))}
-                          userId={user.id}
                         />
                       )}
                       {(user.account_type === "brand" || user.account_type === "influencer") && (
@@ -561,13 +560,11 @@ function TaskActionButton({
   accessToken,
   submissionState,
   onSubmissionStateChange,
-  userId,
 }: {
   task: any;
   accessToken: string | null;
   submissionState?: any;
   onSubmissionStateChange?: (state: any) => void;
-  userId?: string;
 }) {
   const [loading, setLoading] = useState(false);
 

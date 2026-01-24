@@ -101,8 +101,8 @@ export const TaskAPI = {
 export const WalletAPI = {
   get: (accessToken: string) =>
     apiFetch<any>("/api/wallet", {}, accessToken),
-  fund: (accessToken: string, amount: number) =>
-    apiFetch<any>("/api/wallet/fund", { method: "POST", body: JSON.stringify({ amount }) }, accessToken),
+  fund: (accessToken: string, amount: number, currency: string = "usd") =>
+    apiFetch<any>("/api/wallet/fund", { method: "POST", body: JSON.stringify({ amount, currency }) }, accessToken),
 };
 
 // Social endpoints

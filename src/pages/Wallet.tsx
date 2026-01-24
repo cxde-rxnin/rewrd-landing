@@ -68,7 +68,12 @@ export default function Wallet() {
                     onSubmit={async (e) => {
                       e.preventDefault();
                       try {
-                        await fundWallet(Number(amount));
+                        const result = await fundWallet(Number(amount), "usd");
+                        if (result?.checkout_url) {
+                          window.location.href = result.checkout_url;
+                          // Do not close dialog or reset state yet; wait for Stripe redirect
+                          return;
+                        }
                         await fetchWallet();
                         setJustFunded(true);
                         setOpen(false);

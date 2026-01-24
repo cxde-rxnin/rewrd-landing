@@ -5,7 +5,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { useAuth } from "../hooks/api/useAuth";
 
 export default function DashboardLayout() {
-  const { user, accessToken, initialized } = useAuth();
+  const { user, accessToken, initialized } = useAuth() || {};
   const navigate = useNavigate();
 
   useEffect(() => {

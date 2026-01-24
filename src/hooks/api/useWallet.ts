@@ -21,20 +21,23 @@ export function useWallet(accessToken: string | null) {
     }
   }, [accessToken]);
 
-  const fundWallet = useCallback(async (amount: number) => {
-    if (!accessToken) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await WalletAPI.fund(accessToken, amount);
-      setWallet(data);
-      setLoading(false);
-      return data;
-    } catch (e: any) {
-      setError(e?.message || "Failed to fund wallet");
-      setLoading(false);
-    }
-  }, [accessToken]);
+  const fundWallet = useCallback(
+    async (amount: number, currency: string = "usd") => {
+      if (!accessToken) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await WalletAPI.fund(accessToken, amount, currency);
+        setWallet(data);
+        setLoading(false);
+        return data;
+      } catch (e: any) {
+        setError(e?.message || "Failed to fund wallet");
+        setLoading(false);
+      }
+    },
+    [accessToken]
+  );
 
   return {
     wallet,
