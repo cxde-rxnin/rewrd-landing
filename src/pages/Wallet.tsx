@@ -69,8 +69,8 @@ export default function Wallet() {
                       e.preventDefault();
                       try {
                         const result = await fundWallet(Number(amount), "usd");
-                        if (result?.checkout_url) {
-                          window.location.href = result.checkout_url;
+                        if (result?.data?.checkout_url) {
+                          window.location.href = result.data.checkout_url;
                           // Do not close dialog or reset state yet; wait for Stripe redirect
                           return;
                         }
