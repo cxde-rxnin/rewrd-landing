@@ -221,8 +221,8 @@ export default function Tasks() {
     })
     : [];
 
-  const completedTasks = filteredTasks.filter((t: any) => t.status === "completed").length;
-  const pendingTasks = filteredTasks.filter((t: any) => t.status !== "completed").length;
+  const completedTasks = filteredTasks.filter((t: any) => t.status === "completed" || t.status === "verified").length;
+  const pendingTasks = filteredTasks.filter((t: any) => t.status !== "completed" && t.status !== "verified").length;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -593,7 +593,8 @@ function TaskActionButton({
   }
 
   // Only show buttons if task is active and not completed
-  if (!isActive || isCompleted) return null;
+  if (!isActive && !isCompleted && task.status !== "verified") return null;
+  if (isCompleted && task.status !== "verified") return null;
 
   const handleBegin = async () => {
     try {
@@ -654,6 +655,15 @@ function TaskActionButton({
             {loading ? "Submitting..." : "Submit Task"}
           </Button>
         </>
+      ) : task.status === "verified" ? (
+        <Button
+          className="w-full bg-green-600 text-white hover:bg-green-700"
+          variant={undefined}
+          size="sm"
+          disabled={true}
+        >
+          Verified
+        </Button>
       ) : (
         <Button
           className="w-full bg-amber-600 text-white hover:bg-amber-700"
@@ -721,6 +731,11 @@ function TaskStatusBadge({
       displayText = "In Progress";
       bgColor = "bg-yellow-100";
       textColor = "text-yellow-700";
+    } else if (submissionStatus === "verified") {
+      status = "verified";
+      displayText = "Verified";
+      bgColor = "bg-green-100";
+      textColor = "text-green-700";
     }
   } else if (userType === "participant" && task.has_submitted) {
     // Fallback: if has_submitted is true, show as Submitted
@@ -730,8 +745,8 @@ function TaskStatusBadge({
     textColor = "text-purple-700";
   } else {
     // For brands/influencers, use task status
-    if (status === "completed") {
-      displayText = "Completed";
+    if (status === "completed" || status === "verified") {
+      displayText = status === "verified" ? "Verified" : "Completed";
       bgColor = "bg-green-100";
       textColor = "text-green-700";
     } else if (status === "active" || status === "available") {

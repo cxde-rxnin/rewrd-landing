@@ -106,6 +106,16 @@ const Dashboard = () => {
             </Card>
             <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{filteredTasks.filter((t: any) => t.status === "completed" || t.status === "verified").length}</div>
+                <p className="text-xs text-muted-foreground">All time</p>
+              </CardContent>
+              <img src="/trophy.png" alt="completed" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
+            </Card>
+            <Card className="relative overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
               </CardHeader>
               <CardContent>
