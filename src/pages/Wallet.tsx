@@ -70,7 +70,12 @@ export default function Wallet() {
                       try {
                         const result = await fundWallet(Number(amount), "usd");
                         if (result?.data?.checkout_url) {
-                          window.location.href = result.data.checkout_url;
+                          // Ensure the redirect uses the VITE_BASE_URL as callback
+                          const appUrl = import.meta.env.VITE_BASE_URL || "https://usepartnerpulse.vercel.app/";
+                          const url = new URL(result.data.checkout_url);
+                          // Replace the 'return_url' param if present, or add it
+                          url.searchParams.set('return_url', appUrl + 'wallet');
+                          window.location.href = url.toString();
                           // Do not close dialog or reset state yet; wait for Stripe redirect
                           return;
                         }

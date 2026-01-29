@@ -104,7 +104,7 @@ const Dashboard = () => {
               </CardContent>
               <img src="/campaign.png" alt="campaign" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
             </Card>
-            <Card className="relative overflow-hidden">
+            {/* <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
               </CardHeader>
@@ -113,7 +113,7 @@ const Dashboard = () => {
                 <p className="text-xs text-muted-foreground">All time</p>
               </CardContent>
               <img src="/trophy.png" alt="completed" className="absolute -bottom-20 -right-16 w-40 h-40 opacity-80 pointer-events-none select-none" style={{ zIndex: 0 }} />
-            </Card>
+            </Card> */}
             <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
