@@ -111,6 +111,8 @@ export default function Tasks() {
 
         if (eventData?.status === "approved") {
           toast.success("Your task submission has been approved!");
+        } else if (eventData?.status === "verified") {
+          toast.success("Your task submission has been verified!");
         } else if (eventData?.status === "rejected") {
           toast.error("Your task submission was rejected");
           console.log("Submission rejected. Task ID:", eventData?.task_id, "User ID:", eventData?.user_id, "Submission ID:", eventData?.id);
@@ -594,8 +596,8 @@ function TaskActionButton({
     if (submissionState?.status === 'rejected') {
       hasStarted = false;
       isSubmitted = false;
-    } else if (submissionState?.status === 'verifying') {
-      // Task is being verified - user cannot submit again
+    } else if (submissionState?.status === 'verifying' || submissionState?.status === 'verified') {
+      // Task is being verified or already verified - user cannot submit again
       hasStarted = true;
       isSubmitted = true;
     } else {
@@ -610,11 +612,12 @@ function TaskActionButton({
     // If my_submission exists, check its status
     // 'pending' = task started but not submitted yet (user can submit)
     // 'verifying' = task has been submitted and is awaiting admin verification (user cannot submit)
+    // 'verified' = task has been verified (user cannot submit)
     // 'approved' or 'completed' = task is complete
     // 'rejected' = task was rejected, can restart
     const status = mySubmission.status;
-    if (status === 'verifying') {
-      // Task is being verified by admin - user cannot submit again
+    if (status === 'verifying' || status === 'verified') {
+      // Task is being verified or already verified by admin - user cannot submit again
       hasStarted = true;
       isSubmitted = true;
     } else if (status === 'pending' || status === 'in_progress' || !status) {
@@ -698,12 +701,18 @@ function TaskActionButton({
         </>
       ) : (
         <Button
-          className="w-full bg-amber-600 text-white hover:bg-amber-700"
+          className={`w-full ${
+            (submissionState?.status === 'verified' || mySubmission?.status === 'verified')
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-amber-600 text-white hover:bg-amber-700'
+          }`}
           variant={undefined}
           size="sm"
           disabled={true}
         >
-          Verifying...
+          {(submissionState?.status === 'verified' || mySubmission?.status === 'verified')
+            ? 'Verified'
+            : 'Verifying...'}
         </Button>
       )}
     </div>
@@ -754,6 +763,11 @@ function TaskStatusBadge({
         displayText = "Verifying";
         bgColor = "bg-blue-100";
         textColor = "text-blue-700";
+      } else if (submissionStatus === "verified") {
+        status = "verified";
+        displayText = "Verified";
+        bgColor = "bg-green-100";
+        textColor = "text-green-700";
       } else if (submissionStatus === "submitted" || submissionStatus === "pending" || (submissionStatus === "in_progress" && uiState !== "started")) {
         status = "submitted";
         displayText = "Submitted";
@@ -785,6 +799,11 @@ function TaskStatusBadge({
         displayText = "Verifying";
         bgColor = "bg-blue-100";
         textColor = "text-blue-700";
+      } else if (mySubmissionStatus === "verified") {
+        status = "verified";
+        displayText = "Verified";
+        bgColor = "bg-green-100";
+        textColor = "text-green-700";
       } else if (mySubmissionStatus === "pending" || mySubmissionStatus === "in_progress" || !mySubmissionStatus) {
         // Task started but not submitted - show "In Progress"
         status = "in_progress";
