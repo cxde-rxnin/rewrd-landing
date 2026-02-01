@@ -59,14 +59,14 @@ export default function Tasks() {
         toast.info("A task has been removed");
       } else if (eventType === "task:started" || eventType === "task_started" || eventType === "task_claimed") {
         toast.info("A task has been started by a participant");
-        // Update submission state to in_progress
+        // Update submission state to pending (started but not submitted)
         if (eventData?.task_id) {
           setSubmissionStates((prev: any) => {
             const currentState = prev[eventData.task_id] || {};
             return {
               ...prev,
               [eventData.task_id]: {
-                status: 'in_progress',
+                status: 'pending',
                 submissionId: eventData.id,
                 uiState: currentState.uiState
               }
@@ -164,6 +164,12 @@ export default function Tasks() {
   useEffect(() => {
     if (Array.isArray(tasks)) {
       console.log("Fetched tasks:", tasks);
+      // Log my_submission data for debugging
+      tasks.forEach((task: any) => {
+        if (task.my_submission) {
+          console.log(`Task ${task.id} my_submission:`, task.my_submission);
+        }
+      });
     }
   }, [tasks]);
 
@@ -568,29 +574,63 @@ function TaskActionButton({
 }) {
   const [loading, setLoading] = useState(false);
 
-  // Determine task state
+  // Determine task state based on my_submission object
   const isCompleted = !!task.has_completed;
   const isActive = !!task.is_active;
 
-  // Use can_start and has_submitted as fallbacks for hasStarted/isSubmitted if no submissionState
+  // Use my_submission object to determine task state
+  // When my_submission is null, user hasn't started the task (show "Begin Task")
+  // When my_submission.status exists, use it to determine button state
+  const mySubmission = task.my_submission;
   let hasStarted = false;
   let isSubmitted = false;
 
+  // Debug logging
+  console.log(`Task ${task.id} - mySubmission:`, mySubmission, 'submissionState:', submissionState);
+
   if (submissionState) {
-    hasStarted = submissionState?.uiState === 'started' ||
-      submissionState?.status === 'in_progress' ||
-      submissionState?.status === 'pending' ||
-      submissionState?.status === 'rejected' ||
-      submissionState?.status === 'verifying';
-    isSubmitted = submissionState?.uiState === 'submitted' ||
-      (submissionState?.status === 'submitted' && submissionState?.uiState !== 'started') ||
-      (submissionState?.status === 'pending' && submissionState?.uiState !== 'started');
-  } else {
-    // If can_start is false, treat as started (unless completed)
-    hasStarted = task.can_start === false && !isCompleted;
-    // If has_submitted is true, treat as submitted
-    isSubmitted = !!task.has_submitted;
+    // Use local submission state if available (for real-time updates)
+    // Note: rejected tasks should allow restart, so don't mark as started
+    if (submissionState?.status === 'rejected') {
+      hasStarted = false;
+      isSubmitted = false;
+    } else if (submissionState?.status === 'verifying') {
+      // Task is being verified - user cannot submit again
+      hasStarted = true;
+      isSubmitted = true;
+    } else {
+      // Task started (pending/in_progress) - user can submit
+      hasStarted = submissionState?.uiState === 'started' ||
+        submissionState?.status === 'in_progress' ||
+        submissionState?.status === 'pending';
+      isSubmitted = submissionState?.uiState === 'submitted' ||
+        (submissionState?.status === 'submitted' && submissionState?.uiState !== 'started');
+    }
+  } else if (mySubmission) {
+    // If my_submission exists, check its status
+    // 'pending' = task started but not submitted yet (user can submit)
+    // 'verifying' = task has been submitted and is awaiting admin verification (user cannot submit)
+    // 'approved' or 'completed' = task is complete
+    // 'rejected' = task was rejected, can restart
+    const status = mySubmission.status;
+    if (status === 'verifying') {
+      // Task is being verified by admin - user cannot submit again
+      hasStarted = true;
+      isSubmitted = true;
+    } else if (status === 'pending' || status === 'in_progress' || !status) {
+      // Task started but not yet submitted - user can submit
+      hasStarted = true;
+      isSubmitted = false;
+    } else if (status === 'rejected') {
+      // Rejected tasks can be restarted
+      hasStarted = false;
+      isSubmitted = false;
+    } else if (status === 'approved' || status === 'completed') {
+      // Task is complete, don't show button
+      return null;
+    }
   }
+  // If my_submission is null, hasStarted and isSubmitted remain false (show "Begin Task")
 
   // Only show buttons if task is active and not completed
   if (!isActive || isCompleted) return null;
@@ -602,7 +642,8 @@ function TaskActionButton({
       }
       if (accessToken) {
         const result = await TaskAPI.submit(accessToken, task.id, "start");
-        const newState = { status: 'in_progress', submissionId: result?.id || result?.data?.id, uiState: 'started' };
+        // Backend returns status as "pending" when task is started
+        const newState = { status: 'pending', submissionId: result?.id || result?.data?.id, uiState: 'started' };
         if (onSubmissionStateChange) {
           onSubmissionStateChange(newState);
         }
@@ -618,11 +659,12 @@ function TaskActionButton({
     try {
       if (accessToken) {
         const result = await TaskAPI.submit(accessToken, task.id, "complete");
-        const newState = { status: 'submitted', submissionId: result?.id || result?.data?.id || submissionState?.submissionId, uiState: 'submitted' };
+        // Update submission status to "verifying" when user submits the task
+        const newState = { status: 'verifying', submissionId: result?.id || result?.data?.id || submissionState?.submissionId, uiState: 'submitted' };
         if (onSubmissionStateChange) {
           onSubmissionStateChange(newState);
         }
-        toast.success("Task submitted!");
+        toast.success("Task submitted for verification!");
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to submit task");
@@ -661,7 +703,7 @@ function TaskActionButton({
           size="sm"
           disabled={true}
         >
-          Submitted
+          Verifying...
         </Button>
       )}
     </div>
@@ -683,51 +725,81 @@ function TaskStatusBadge({
   let bgColor = "bg-amber-100";
   let textColor = "text-amber-700";
 
-  // For participants, check submission status
-  if (userType === "participant" && submissionState) {
-    const submissionStatus = submissionState.status;
-    const uiState = submissionState.uiState;
+  // For participants, check submission status using my_submission object
+  if (userType === "participant") {
+    // Check submissionState first for real-time updates
+    if (submissionState) {
+      const submissionStatus = submissionState.status;
+      const uiState = submissionState.uiState;
 
-    // Check uiState first to distinguish between "started" and "submitted"
-    if (uiState === "started") {
-      // Task has been started but not submitted yet
-      status = "in_progress";
-      displayText = "In Progress";
-      bgColor = "bg-yellow-100";
-      textColor = "text-yellow-700";
-    } else if (submissionStatus === "approved" || submissionStatus === "completed") {
-      status = "completed";
-      displayText = "Completed";
-      bgColor = "bg-green-100";
-      textColor = "text-green-700";
-    } else if (submissionStatus === "rejected") {
-      status = "rejected";
-      displayText = "Rejected";
-      bgColor = "bg-red-100";
-      textColor = "text-red-700";
-    } else if (submissionStatus === "verifying") {
-      status = "verifying";
-      displayText = "Verifying";
-      bgColor = "bg-blue-100";
-      textColor = "text-blue-700";
-    } else if (submissionStatus === "submitted" || submissionStatus === "pending" || (submissionStatus === "in_progress" && uiState !== "started")) {
-      status = "submitted";
-      displayText = "Submitted";
-      bgColor = "bg-purple-100";
-      textColor = "text-purple-700";
-    } else if (submissionStatus === "in_progress") {
-      // Fallback for in_progress without uiState
-      status = "in_progress";
-      displayText = "In Progress";
-      bgColor = "bg-yellow-100";
-      textColor = "text-yellow-700";
+      // Check uiState first to distinguish between "started" and "submitted"
+      if (uiState === "started") {
+        // Task has been started but not submitted yet
+        status = "in_progress";
+        displayText = "In Progress";
+        bgColor = "bg-yellow-100";
+        textColor = "text-yellow-700";
+      } else if (submissionStatus === "approved" || submissionStatus === "completed") {
+        status = "completed";
+        displayText = "Completed";
+        bgColor = "bg-green-100";
+        textColor = "text-green-700";
+      } else if (submissionStatus === "rejected") {
+        status = "rejected";
+        displayText = "Rejected";
+        bgColor = "bg-red-100";
+        textColor = "text-red-700";
+      } else if (submissionStatus === "verifying") {
+        status = "verifying";
+        displayText = "Verifying";
+        bgColor = "bg-blue-100";
+        textColor = "text-blue-700";
+      } else if (submissionStatus === "submitted" || submissionStatus === "pending" || (submissionStatus === "in_progress" && uiState !== "started")) {
+        status = "submitted";
+        displayText = "Submitted";
+        bgColor = "bg-purple-100";
+        textColor = "text-purple-700";
+      } else if (submissionStatus === "in_progress") {
+        // Fallback for in_progress without uiState
+        status = "in_progress";
+        displayText = "In Progress";
+        bgColor = "bg-yellow-100";
+        textColor = "text-yellow-700";
+      }
+    } else if (task.my_submission) {
+      // Use my_submission object from task model
+      const mySubmissionStatus = task.my_submission.status;
+      
+      if (mySubmissionStatus === "approved" || mySubmissionStatus === "completed") {
+        status = "completed";
+        displayText = "Completed";
+        bgColor = "bg-green-100";
+        textColor = "text-green-700";
+      } else if (mySubmissionStatus === "rejected") {
+        status = "rejected";
+        displayText = "Rejected";
+        bgColor = "bg-red-100";
+        textColor = "text-red-700";
+      } else if (mySubmissionStatus === "verifying") {
+        status = "verifying";
+        displayText = "Verifying";
+        bgColor = "bg-blue-100";
+        textColor = "text-blue-700";
+      } else if (mySubmissionStatus === "pending" || mySubmissionStatus === "in_progress" || !mySubmissionStatus) {
+        // Task started but not submitted - show "In Progress"
+        status = "in_progress";
+        displayText = "In Progress";
+        bgColor = "bg-yellow-100";
+        textColor = "text-yellow-700";
+      } else if (mySubmissionStatus === "submitted") {
+        // Fallback for "submitted" status if used
+        status = "submitted";
+        displayText = "Submitted";
+        bgColor = "bg-purple-100";
+        textColor = "text-purple-700";
+      }
     }
-  } else if (userType === "participant" && task.has_submitted) {
-    // Fallback: if has_submitted is true, show as Submitted
-    status = "submitted";
-    displayText = "Submitted";
-    bgColor = "bg-purple-100";
-    textColor = "text-purple-700";
+    // If my_submission is null, show default "Pending" status
   } else {
     // For brands/influencers, use task status
     if (status === "completed") {
