@@ -507,7 +507,10 @@ export default function Tasks() {
                               <span className="text-xs text-muted-foreground">Status</span>
                             </div>
                           )}
-                          <span className="text-xs text-muted-foreground">{t.expires_at ? `Expires: ${new Date(t.expires_at).toLocaleDateString()}` : ""}</span>
+                          <div className="flex flex-col items-end">
+                            <span className="text-xs font-semibold text-muted-foreground">{t.completed_count ?? 0}</span>
+                            <span className="text-xs text-muted-foreground">Completed</span>
+                          </div>
                         </div>
                       </div>
                       {user.account_type === "participant" && (
@@ -592,10 +595,10 @@ function TaskActionButton({
 
   if (submissionState) {
     // Use local submission state if available (for real-time updates)
-    // Note: rejected tasks should allow restart, so don't mark as started
+    // Note: rejected tasks should show disabled button
     if (submissionState?.status === 'rejected') {
-      hasStarted = false;
-      isSubmitted = false;
+      hasStarted = true;
+      isSubmitted = true;
     } else if (submissionState?.status === 'verifying' || submissionState?.status === 'verified') {
       // Task is being verified or already verified - user cannot submit again
       hasStarted = true;
@@ -614,7 +617,7 @@ function TaskActionButton({
     // 'verifying' = task has been submitted and is awaiting admin verification (user cannot submit)
     // 'verified' = task has been verified (user cannot submit)
     // 'approved' or 'completed' = task is complete
-    // 'rejected' = task was rejected, can restart
+    // 'rejected' = task was rejected, show disabled button
     const status = mySubmission.status;
     if (status === 'verifying' || status === 'verified') {
       // Task is being verified or already verified by admin - user cannot submit again
@@ -625,9 +628,9 @@ function TaskActionButton({
       hasStarted = true;
       isSubmitted = false;
     } else if (status === 'rejected') {
-      // Rejected tasks can be restarted
-      hasStarted = false;
-      isSubmitted = false;
+      // Rejected tasks show disabled button
+      hasStarted = true;
+      isSubmitted = true;
     } else if (status === 'approved' || status === 'completed') {
       // Task is complete, don't show button
       return null;
@@ -704,6 +707,8 @@ function TaskActionButton({
           className={`w-full ${
             (submissionState?.status === 'verified' || mySubmission?.status === 'verified')
               ? 'bg-green-600 text-white hover:bg-green-700'
+              : (submissionState?.status === 'rejected' || mySubmission?.status === 'rejected')
+              ? 'bg-red-600 text-white hover:bg-red-700'
               : 'bg-amber-600 text-white hover:bg-amber-700'
           }`}
           variant={undefined}
@@ -712,6 +717,8 @@ function TaskActionButton({
         >
           {(submissionState?.status === 'verified' || mySubmission?.status === 'verified')
             ? 'Verified'
+            : (submissionState?.status === 'rejected' || mySubmission?.status === 'rejected')
+            ? 'Rejected'
             : 'Verifying...'}
         </Button>
       )}

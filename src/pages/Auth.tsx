@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/api/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ const AuthPage = () => {
   console.log('AuthPage user:', user);
   console.log('AuthPage initialized:', initialized);
   const [tab, setTab] = useState<"login" | "signup">("login");
+  const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -107,14 +109,23 @@ const AuthPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Password</label>
-                  <Input
-                    type="password"
-                    name="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                    className="py-3 px-4"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      required
+                      className="py-3 px-4 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
                 {error && <div className="text-red-500 text-sm">{error}</div>}
                 <Button type="submit" className="w-full mt-2" disabled={loading}>
@@ -147,14 +158,23 @@ const AuthPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Password</label>
-                  <Input
-                    type="password"
-                    name="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                    className="py-3 px-4"
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      required
+                      className="py-3 px-4 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Account Type</label>
