@@ -4,7 +4,7 @@ import { useTasks } from "@/hooks/api/useTasks";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ListChecks, Filter, Plus, Heart, Pencil, Trash2 } from "lucide-react";
+import { ListChecks, Filter, Plus, Heart, Pencil, Trash2, Clock, CheckCircle, XCircle, Loader2, ShieldCheck, Hourglass } from "lucide-react";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TaskAPI } from "@/services/api";
@@ -32,6 +32,60 @@ export default function Tasks() {
   // Track submission states by task ID: { [taskId]: { status: 'pending'|'in_progress'|'submitted', submissionId: string } }
   const [submissionStates, setSubmissionStates] = useState<any>({});
 
+  // Poll for task updates when there are tasks in "verifying" status
+  // Only polls when the tab is visible to save resources
+  // COMMENTED OUT: Relying on WebSocket for real-time updates instead
+  // useEffect(() => {
+  //   // Check if any tasks are in verifying status
+  //   const hasVerifyingTasks = Object.values(submissionStates).some(
+  //     (state: any) => state?.status === 'verifying'
+  //   ) || (Array.isArray(tasks) && tasks.some(
+  //     (t: any) => t.my_submission?.status === 'verifying'
+  //   ));
+
+  //   if (!hasVerifyingTasks || !accessToken) return;
+
+  //   let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+  //   const startPolling = () => {
+  //     // Only poll if tab is visible
+  //     if (document.visibilityState === 'visible') {
+  //       pollInterval = setInterval(() => {
+  //         console.log("Polling for task updates (verifying tasks detected)...");
+  //         fetchTasks();
+  //       }, 15000); // Poll every 15 seconds (less aggressive)
+  //     }
+  //   };
+
+  //   const stopPolling = () => {
+  //     if (pollInterval) {
+  //       clearInterval(pollInterval);
+  //       pollInterval = null;
+  //     }
+  //   };
+
+  //   const handleVisibilityChange = () => {
+  //     if (document.visibilityState === 'visible') {
+  //       // Fetch immediately when tab becomes visible, then start polling
+  //       fetchTasks();
+  //       startPolling();
+  //     } else {
+  //       stopPolling();
+  //     }
+  //   };
+
+  //   // Start polling if tab is visible
+  //   startPolling();
+    
+  //   // Listen for tab visibility changes
+  //   document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  //   return () => {
+  //     stopPolling();
+  //     document.removeEventListener('visibilitychange', handleVisibilityChange);
+  //   };
+  // }, [submissionStates, tasks, accessToken, fetchTasks]);
+
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
     fetchTasks();
@@ -49,6 +103,26 @@ export default function Tasks() {
       const eventData = message.data || message;
 
       console.log("Event type:", eventType);
+
+      // Check for verify/verified events first (highest priority)
+      if (eventType === "verify" || eventType === "verified") {
+        console.log("Verify event received:", { eventType, eventData });
+        const taskId = eventData?.task_id || eventData?.taskId;
+        
+        if (taskId) {
+          toast.success("Your task submission has been verified!");
+          setSubmissionStates((prev: any) => ({
+            ...prev,
+            [taskId]: {
+              status: 'verified',
+              submissionId: eventData.id || eventData.submission_id,
+              uiState: 'submitted'
+            }
+          }));
+          fetchTasks();
+        }
+        return; // Exit early, we've handled this event
+      }
 
       // Handle different types of task-related events
       if (eventType === "task:created" || eventType === "task_created") {
@@ -93,33 +167,71 @@ export default function Tasks() {
             };
           });
         }
-      } else if (eventType === "submission:updated" || eventType === "task:submission:updated") {
+      } else if (eventType === "submission:updated" || eventType === "task:submission:updated" || eventType === "submission:verified" || eventType === "submission_verified" || eventType === "verify" || eventType === "submission:verify") {
         // Handle submission status updates - update local state immediately
-        if (eventData?.task_id) {
+        const taskId = eventData?.task_id || eventData?.taskId;
+        const submissionStatus = eventData?.status || (eventType.includes("verified") || eventType === "verify" ? "verified" : null);
+        
+        console.log("Submission update received:", { eventType, taskId, submissionStatus, eventData });
+        
+        if (taskId) {
           setSubmissionStates((prev: any) => {
-            const currentState = prev[eventData.task_id] || {};
+            const currentState = prev[taskId] || {};
             return {
               ...prev,
-              [eventData.task_id]: {
-                status: eventData.status,
-                submissionId: eventData.id,
+              [taskId]: {
+                status: submissionStatus,
+                submissionId: eventData.id || eventData.submission_id,
                 uiState: currentState.uiState
               }
             };
           });
         }
 
-        if (eventData?.status === "approved") {
+        if (submissionStatus === "approved") {
           toast.success("Your task submission has been approved!");
-        } else if (eventData?.status === "verified") {
+          // Refresh tasks to get updated data
+          fetchTasks();
+        } else if (submissionStatus === "verified") {
           toast.success("Your task submission has been verified!");
-        } else if (eventData?.status === "rejected") {
+          // Update submission state to verified
+          if (taskId) {
+            setSubmissionStates((prev: any) => {
+              const currentState = prev[taskId] || {};
+              return {
+                ...prev,
+                [taskId]: {
+                  status: 'verified',
+                  submissionId: eventData.id || eventData.submission_id,
+                  uiState: 'submitted'
+                }
+              };
+            });
+          }
+          // Refresh tasks to get updated data from server
+          fetchTasks();
+        } else if (submissionStatus === "rejected") {
           toast.error("Your task submission was rejected");
-          console.log("Submission rejected. Task ID:", eventData?.task_id, "User ID:", eventData?.user_id, "Submission ID:", eventData?.id);
+          console.log("Submission rejected. Task ID:", taskId, "User ID:", eventData?.user_id, "Submission ID:", eventData?.id);
+
+          // Update submission state to rejected
+          if (taskId) {
+            setSubmissionStates((prev: any) => {
+              const currentState = prev[taskId] || {};
+              return {
+                ...prev,
+                [taskId]: {
+                  status: 'rejected',
+                  submissionId: eventData.id || eventData.submission_id,
+                  uiState: 'submitted'
+                }
+              };
+            });
+          }
 
           // Fetch submission details for more information
-          if (accessToken && eventData?.task_id) {
-            TaskAPI.getSubmissionStatus(accessToken, eventData.task_id)
+          if (accessToken && taskId) {
+            TaskAPI.getSubmissionStatus(accessToken, taskId)
               .then(submissionDetails => {
                 console.log("Rejected submission details:", submissionDetails);
                 // Check if there's a rejection reason in the response
@@ -131,45 +243,71 @@ export default function Tasks() {
                 console.error("Failed to fetch submission details:", err);
               });
           }
-        } else if (eventData?.status === "pending") {
+          // Refresh tasks
+          fetchTasks();
+        } else if (submissionStatus === "pending") {
           toast.info("Your task submission is pending review");
         } else {
           // Default notification for other status changes (e.g., started, in_progress, or missing status)
           toast.info("Task submission updated");
         }
-      } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected") {
-        const status = eventType === "submission:approved" || eventType === "submission_approved" ? "approved" :
-          eventType === "submission:rejected" || eventType === "submission_rejected" ? "rejected" : "reviewed";
+      } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected" || eventType === "submission:verified" || eventType === "submission_verified" || eventType === "verify") {
+        const status = eventType.includes("approved") ? "approved" :
+          eventType.includes("rejected") ? "rejected" : 
+          (eventType.includes("verified") || eventType === "verify") ? "verified" : "reviewed";
         toast.info(`Your task submission has been ${status}`);
         // Update submission state
-        if (eventData?.task_id) {
+        const taskId = eventData?.task_id || eventData?.taskId;
+        if (taskId) {
           setSubmissionStates((prev: any) => {
-            const currentState = prev[eventData.task_id] || {};
+            const currentState = prev[taskId] || {};
             return {
               ...prev,
-              [eventData.task_id]: {
+              [taskId]: {
                 status: status,
-                submissionId: eventData.id,
-                uiState: currentState.uiState
+                submissionId: eventData.id || eventData.submission_id,
+                uiState: 'submitted'
               }
             };
           });
         }
+        // Refresh tasks to get updated data
+        fetchTasks();
       } else if (eventType === "task:completed" || eventType === "task_completed") {
         toast.success("A task has been completed!");
       }
     });
 
     return unsubscribe;
-  }, [accessToken, subscribe]);
+  }, [accessToken, subscribe, fetchTasks]);
 
   useEffect(() => {
     if (Array.isArray(tasks)) {
       console.log("Fetched tasks:", tasks);
-      // Log my_submission data for debugging
+      // Log my_submission data for debugging and sync submissionStates
       tasks.forEach((task: any) => {
         if (task.my_submission) {
           console.log(`Task ${task.id} my_submission:`, task.my_submission);
+          
+          // Sync submissionStates with server data if the server has a newer/different status
+          const currentState = submissionStates[task.id];
+          const serverStatus = task.my_submission.status;
+          
+          // Update local state if server has verified/rejected/approved status
+          // and our local state doesn't match (to ensure real-time updates work)
+          if (serverStatus && ['verified', 'rejected', 'approved', 'completed'].includes(serverStatus)) {
+            if (!currentState || currentState.status !== serverStatus) {
+              console.log(`Syncing task ${task.id} status from server: ${serverStatus}`);
+              setSubmissionStates((prev: any) => ({
+                ...prev,
+                [task.id]: {
+                  status: serverStatus,
+                  submissionId: task.my_submission.id,
+                  uiState: 'submitted'
+                }
+              }));
+            }
+          }
         }
       });
     }
@@ -507,9 +645,14 @@ export default function Tasks() {
                               <span className="text-xs text-muted-foreground">Status</span>
                             </div>
                           )}
-                          <div className="flex flex-col items-end">
-                            <span className="text-xs font-semibold text-muted-foreground">{t.completed_count ?? 0}</span>
-                            <span className="text-xs text-muted-foreground">Completed</span>
+                          <div className="flex flex-col items-end w-24">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                                style={{ width: `${Math.min(((t.completed_count ?? 0) / (t.count || 1)) * 100, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-muted-foreground mt-1">{t.completed_count ?? 0}/{t.count ?? 0}</span>
                           </div>
                         </div>
                       </div>
@@ -737,9 +880,9 @@ function TaskStatusBadge({
 }) {
   // Determine the status to display
   let status = task.status || "pending";
-  let displayText = "Pending";
   let bgColor = "bg-amber-100";
-  let textColor = "text-amber-700";
+  let iconColor = "text-amber-600";
+  let Icon = Clock;
 
   // For participants, check submission status using my_submission object
   if (userType === "participant") {
@@ -752,40 +895,45 @@ function TaskStatusBadge({
       if (uiState === "started") {
         // Task has been started but not submitted yet
         status = "in_progress";
-        displayText = "In Progress";
+        Icon = Hourglass;
         bgColor = "bg-yellow-100";
-        textColor = "text-yellow-700";
+        iconColor = "text-yellow-600";
       } else if (submissionStatus === "approved" || submissionStatus === "completed") {
         status = "completed";
-        displayText = "Completed";
+        Icon = CheckCircle;
         bgColor = "bg-green-100";
-        textColor = "text-green-700";
+        iconColor = "text-green-600";
       } else if (submissionStatus === "rejected") {
         status = "rejected";
-        displayText = "Rejected";
+        Icon = XCircle;
         bgColor = "bg-red-100";
-        textColor = "text-red-700";
+        iconColor = "text-red-600";
       } else if (submissionStatus === "verifying") {
         status = "verifying";
-        displayText = "Verifying";
+        Icon = Loader2;
         bgColor = "bg-blue-100";
-        textColor = "text-blue-700";
+        iconColor = "text-blue-600";
       } else if (submissionStatus === "verified") {
         status = "verified";
-        displayText = "Verified";
+        Icon = ShieldCheck;
         bgColor = "bg-green-100";
-        textColor = "text-green-700";
-      } else if (submissionStatus === "submitted" || submissionStatus === "pending" || (submissionStatus === "in_progress" && uiState !== "started")) {
+        iconColor = "text-green-600";
+      } else if (submissionStatus === "pending") {
+        status = "in_progress";
+        Icon = Hourglass;
+        bgColor = "bg-yellow-100";
+        iconColor = "text-yellow-600";
+      } else if (submissionStatus === "submitted" || (submissionStatus === "in_progress" && uiState !== "started")) {
         status = "submitted";
-        displayText = "Submitted";
+        Icon = Clock;
         bgColor = "bg-purple-100";
-        textColor = "text-purple-700";
+        iconColor = "text-purple-600";
       } else if (submissionStatus === "in_progress") {
         // Fallback for in_progress without uiState
         status = "in_progress";
-        displayText = "In Progress";
+        Icon = Hourglass;
         bgColor = "bg-yellow-100";
-        textColor = "text-yellow-700";
+        iconColor = "text-yellow-600";
       }
     } else if (task.my_submission) {
       // Use my_submission object from task model
@@ -793,55 +941,61 @@ function TaskStatusBadge({
       
       if (mySubmissionStatus === "approved" || mySubmissionStatus === "completed") {
         status = "completed";
-        displayText = "Completed";
+        Icon = CheckCircle;
         bgColor = "bg-green-100";
-        textColor = "text-green-700";
+        iconColor = "text-green-600";
       } else if (mySubmissionStatus === "rejected") {
         status = "rejected";
-        displayText = "Rejected";
+        Icon = XCircle;
         bgColor = "bg-red-100";
-        textColor = "text-red-700";
+        iconColor = "text-red-600";
       } else if (mySubmissionStatus === "verifying") {
         status = "verifying";
-        displayText = "Verifying";
+        Icon = Loader2;
         bgColor = "bg-blue-100";
-        textColor = "text-blue-700";
+        iconColor = "text-blue-600";
       } else if (mySubmissionStatus === "verified") {
         status = "verified";
-        displayText = "Verified";
+        Icon = ShieldCheck;
         bgColor = "bg-green-100";
-        textColor = "text-green-700";
-      } else if (mySubmissionStatus === "pending" || mySubmissionStatus === "in_progress" || !mySubmissionStatus) {
+        iconColor = "text-green-600";
+      } else if (mySubmissionStatus === "pending") {
+        // Task started, pending submission or review - show "In Progress"
+        status = "in_progress";
+        Icon = Hourglass;
+        bgColor = "bg-yellow-100";
+        iconColor = "text-yellow-600";
+      } else if (mySubmissionStatus === "in_progress" || !mySubmissionStatus) {
         // Task started but not submitted - show "In Progress"
         status = "in_progress";
-        displayText = "In Progress";
+        Icon = Hourglass;
         bgColor = "bg-yellow-100";
-        textColor = "text-yellow-700";
+        iconColor = "text-yellow-600";
       } else if (mySubmissionStatus === "submitted") {
         // Fallback for "submitted" status if used
         status = "submitted";
-        displayText = "Submitted";
+        Icon = Clock;
         bgColor = "bg-purple-100";
-        textColor = "text-purple-700";
+        iconColor = "text-purple-600";
       }
     }
-    // If my_submission is null, show default "Pending" status
+    // If my_submission is null, show default "Pending" status (Clock icon)
   } else {
     // For brands/influencers, use task status
     if (status === "completed") {
-      displayText = "Completed";
+      Icon = CheckCircle;
       bgColor = "bg-green-100";
-      textColor = "text-green-700";
+      iconColor = "text-green-600";
     } else if (status === "active" || status === "available") {
-      displayText = "Active";
+      Icon = Clock;
       bgColor = "bg-blue-100";
-      textColor = "text-blue-700";
+      iconColor = "text-blue-600";
     }
   }
 
   return (
-    <span className={`rounded-full px-3 py-1 text-xs font-medium ${bgColor} ${textColor}`}>
-      {displayText}
+    <span className={`rounded-full p-2 ${bgColor}`} title={status}>
+      <Icon className={`w-4 h-4 ${iconColor} ${status === "verifying" ? "animate-spin" : ""}`} />
     </span>
   );
 }
