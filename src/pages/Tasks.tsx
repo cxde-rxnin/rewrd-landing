@@ -196,17 +196,14 @@ export default function Tasks() {
           toast.success("Your task submission has been verified!");
           // Update submission state to verified
           if (taskId) {
-            setSubmissionStates((prev: any) => {
-              const currentState = prev[taskId] || {};
-              return {
-                ...prev,
-                [taskId]: {
-                  status: 'verified',
-                  submissionId: eventData.id || eventData.submission_id,
-                  uiState: 'submitted'
-                }
-              };
-            });
+            setSubmissionStates((prev: any) => ({
+              ...prev,
+              [taskId]: {
+                status: 'verified',
+                submissionId: eventData.id || eventData.submission_id,
+                uiState: 'submitted'
+              }
+            }));
           }
           // Refresh tasks to get updated data from server
           fetchTasks();
@@ -216,17 +213,14 @@ export default function Tasks() {
 
           // Update submission state to rejected
           if (taskId) {
-            setSubmissionStates((prev: any) => {
-              const currentState = prev[taskId] || {};
-              return {
-                ...prev,
-                [taskId]: {
-                  status: 'rejected',
-                  submissionId: eventData.id || eventData.submission_id,
-                  uiState: 'submitted'
-                }
-              };
-            });
+            setSubmissionStates((prev: any) => ({
+              ...prev,
+              [taskId]: {
+                status: 'rejected',
+                submissionId: eventData.id || eventData.submission_id,
+                uiState: 'submitted'
+              }
+            }));
           }
 
           // Fetch submission details for more information
@@ -259,17 +253,14 @@ export default function Tasks() {
         // Update submission state
         const taskId = eventData?.task_id || eventData?.taskId;
         if (taskId) {
-          setSubmissionStates((prev: any) => {
-            const currentState = prev[taskId] || {};
-            return {
-              ...prev,
-              [taskId]: {
-                status: status,
-                submissionId: eventData.id || eventData.submission_id,
-                uiState: 'submitted'
-              }
-            };
-          });
+          setSubmissionStates((prev: any) => ({
+            ...prev,
+            [taskId]: {
+              status: status,
+              submissionId: eventData.id || eventData.submission_id,
+              uiState: 'submitted'
+            }
+          }));
         }
         // Refresh tasks to get updated data
         fetchTasks();
@@ -631,7 +622,7 @@ export default function Tasks() {
                         <div className="flex items-center justify-between mt-2">
                           {user.account_type === "participant" ? (
                             <div className="flex flex-col items-start">
-                              <span className="font-semibold text-green-600 text-base">+{t.reward ?? t.amount ?? 0}</span>
+                              <span className="font-semibold text-green-600 text-base">${t.reward ?? t.amount ?? 0}</span>
                               <span className="text-xs text-muted-foreground">Reward</span>
                             </div>
                           ) : user.account_type === "brand" ? (
