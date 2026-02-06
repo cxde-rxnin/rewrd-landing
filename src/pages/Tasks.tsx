@@ -622,7 +622,7 @@ export default function Tasks() {
                         <div className="flex items-center justify-between mt-2">
                           {user.account_type === "participant" ? (
                             <div className="flex flex-col items-start">
-                              <span className="font-semibold text-green-600 text-base">${t.reward ?? t.amount ?? 0}</span>
+                              <span className="font-semibold text-green-600 text-base">${Number(t.reward ?? t.amount ?? 0).toLocaleString()}</span>
                               <span className="text-xs text-muted-foreground">Reward</span>
                             </div>
                           ) : user.account_type === "brand" ? (
