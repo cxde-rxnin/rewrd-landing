@@ -76,7 +76,7 @@ export default function Tasks() {
 
   //   // Start polling if tab is visible
   //   startPolling();
-    
+
   //   // Listen for tab visibility changes
   //   document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -108,7 +108,7 @@ export default function Tasks() {
       if (eventType === "verify" || eventType === "verified") {
         console.log("Verify event received:", { eventType, eventData });
         const taskId = eventData?.task_id || eventData?.taskId;
-        
+
         if (taskId) {
           toast.success("Your task submission has been verified!");
           setSubmissionStates((prev: any) => ({
@@ -171,9 +171,9 @@ export default function Tasks() {
         // Handle submission status updates - update local state immediately
         const taskId = eventData?.task_id || eventData?.taskId;
         const submissionStatus = eventData?.status || (eventType.includes("verified") || eventType === "verify" ? "verified" : null);
-        
+
         console.log("Submission update received:", { eventType, taskId, submissionStatus, eventData });
-        
+
         if (taskId) {
           setSubmissionStates((prev: any) => {
             const currentState = prev[taskId] || {};
@@ -247,8 +247,8 @@ export default function Tasks() {
         }
       } else if (eventType === "submission:reviewed" || eventType === "submission_reviewed" || eventType === "submission:approved" || eventType === "submission_approved" || eventType === "submission:rejected" || eventType === "submission_rejected" || eventType === "submission:verified" || eventType === "submission_verified" || eventType === "verify") {
         const status = eventType.includes("approved") ? "approved" :
-          eventType.includes("rejected") ? "rejected" : 
-          (eventType.includes("verified") || eventType === "verify") ? "verified" : "reviewed";
+          eventType.includes("rejected") ? "rejected" :
+            (eventType.includes("verified") || eventType === "verify") ? "verified" : "reviewed";
         toast.info(`Your task submission has been ${status}`);
         // Update submission state
         const taskId = eventData?.task_id || eventData?.taskId;
@@ -266,6 +266,29 @@ export default function Tasks() {
         fetchTasks();
       } else if (eventType === "task:completed" || eventType === "task_completed") {
         toast.success("A task has been completed!");
+
+        // Handle task completion update using the payload structure provided
+        // eventData.id is the task ID
+        // eventData.my_submission contains the submission details
+        const taskId = eventData?.id || eventData?.task_id || eventData?.taskId;
+        const submissionStatus = eventData?.my_submission?.status || eventData?.status || "verified";
+        const submissionId = eventData?.my_submission?.id || eventData?.submission_id;
+
+        console.log("Task completed event received:", { taskId, submissionStatus, submissionId });
+
+        if (taskId) {
+          setSubmissionStates((prev: any) => ({
+            ...prev,
+            [taskId]: {
+              status: submissionStatus,
+              submissionId: submissionId,
+              uiState: 'submitted'
+            }
+          }));
+        }
+
+        // Refresh tasks to ensure consistency
+        fetchTasks();
       }
     });
 
@@ -279,11 +302,11 @@ export default function Tasks() {
       tasks.forEach((task: any) => {
         if (task.my_submission) {
           console.log(`Task ${task.id} my_submission:`, task.my_submission);
-          
+
           // Sync submissionStates with server data if the server has a newer/different status
           const currentState = submissionStates[task.id];
           const serverStatus = task.my_submission.status;
-          
+
           // Update local state if server has verified/rejected/approved status
           // and our local state doesn't match (to ensure real-time updates work)
           if (serverStatus && ['verified', 'rejected', 'approved', 'completed'].includes(serverStatus)) {
@@ -638,8 +661,8 @@ export default function Tasks() {
                           )}
                           <div className="flex flex-col items-end w-24">
                             <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                              <div
+                                className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                                 style={{ width: `${Math.min(((t.completed_count ?? 0) / (t.count || 1)) * 100, 100)}%` }}
                               />
                             </div>
@@ -838,13 +861,12 @@ function TaskActionButton({
         </>
       ) : (
         <Button
-          className={`w-full ${
-            (submissionState?.status === 'verified' || mySubmission?.status === 'verified')
+          className={`w-full ${(submissionState?.status === 'verified' || mySubmission?.status === 'verified')
               ? 'bg-green-600 text-white hover:bg-green-700'
               : (submissionState?.status === 'rejected' || mySubmission?.status === 'rejected')
-              ? 'bg-red-600 text-white hover:bg-red-700'
-              : 'bg-amber-600 text-white hover:bg-amber-700'
-          }`}
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-amber-600 text-white hover:bg-amber-700'
+            }`}
           variant={undefined}
           size="sm"
           disabled={true}
@@ -852,8 +874,8 @@ function TaskActionButton({
           {(submissionState?.status === 'verified' || mySubmission?.status === 'verified')
             ? 'Verified'
             : (submissionState?.status === 'rejected' || mySubmission?.status === 'rejected')
-            ? 'Rejected'
-            : 'Verifying...'}
+              ? 'Rejected'
+              : 'Verifying...'}
         </Button>
       )}
     </div>
@@ -929,7 +951,7 @@ function TaskStatusBadge({
     } else if (task.my_submission) {
       // Use my_submission object from task model
       const mySubmissionStatus = task.my_submission.status;
-      
+
       if (mySubmissionStatus === "approved" || mySubmissionStatus === "completed") {
         status = "completed";
         Icon = CheckCircle;
